@@ -1,5 +1,5 @@
-# 007: NightFire - XBE Recomp
-An unofficial native PC port of the original Xbox version of 007: NightFire, with extended graphics options and other enhancements.
+# 007: Nightfire - XBE Recomp
+An unofficial native PC port of the original Xbox version of 007: Nightfire, with extended graphics options and other enhancements.
 
 This port was created using the [Xbox XBE Recomp](https://github.com/TGP482/XboxXBE-Recomp) tool.
 
