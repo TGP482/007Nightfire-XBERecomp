@@ -6,8 +6,14 @@
 #endif
 #include <windows.h>
 
+#include <string>
+
+#include <toml++/toml.hpp>
+
 #include "app/app.h"
 #include "common/menu.h"
+#include "common/mouse_keyboard.h"
+#include "common/options.h"
 #include "core/input.h"
 
 namespace game {
@@ -22,14 +28,14 @@ bool Take(intptr_t* result) {
     return true;
 }
 
-// F10 opens and closes the panel, Escape closes it
+// the settings panel key opens and closes the panel, Escape closes it unless a key binding waits for it
 bool PanelKeyDown(uint32_t msg, uintptr_t key, intptr_t lp, intptr_t* result) {
     bool first_press = !(lp & kKeyWasDown);
-    if (first_press && key == VK_F10) {
+    if (first_press && input::PanelKey(int(key))) {
         app::ToggleMenu();
         return Take(result);
     }
-    if (msg == WM_KEYDOWN && key == VK_ESCAPE && app::MenuOpen()) {
+    if (msg == WM_KEYDOWN && key == VK_ESCAPE && app::MenuOpen() && !app::Capturing()) {
         app::ToggleMenu();
         return Take(result);
     }
@@ -48,11 +54,7 @@ bool Message(void*, uint32_t msg, uintptr_t wp, intptr_t lp, intptr_t* result) {
         case WM_SYSKEYDOWN:
             return PanelKeyDown(msg, wp, lp, result);
         case WM_SYSCOMMAND:
-            LogClose(msg, wp);
             return SwallowKeyMenu(wp, result);
-        case WM_CLOSE:
-            LogClose(msg, wp);
-            return false;
         case WM_INPUT:
             input::OnRawInput(reinterpret_cast<void*>(lp));
             return false;
@@ -92,6 +94,11 @@ void Save(void* table) {
 
 }  // namespace
 
+Options& Opt() {
+    static Options o;
+    return o;
+}
+
 }  // namespace game
 
 // what the runtime asks of the game; strings must be set, hooks may stay null
@@ -105,14 +112,15 @@ const app::GameInfo app::kGame = {
     .missing = L"Put the game in the assets folder: its disc image (.iso), or default.xbe with its folders beside it.",
     .images = {{"default.xbe", "007Nightfire"},  // each recompiled xbe and its exe, for title launches
                {"Driving.xbe", "007NightfireDriving"}},
-    .options = {},                          // game settings kept in the settings file
-    .load = nullptr,                        // reads more from the settings file's toml::table
-    .save = nullptr,                        // writes more into it
-    .init = nullptr,                        // after the settings load, before the window and boot
+    .options = {{"skip_intros", &game::Opt().skip_intros, nullptr},
+                {"invert_mouse", &game::Opt().invert_mouse, nullptr}},  // game settings kept in the settings file
+    .load = game::Load,                     // reads more from the settings file's toml::table
+    .save = game::Save,                     // writes more into it
+    .init = input::LoadBindings,            // after the settings load, before the window and boot
     .loaded = nullptr,                      // image in memory, before its entry point runs
-    .window = nullptr,                      // the game window is up
+    .window = input::StartMouse,            // the game window is up
     .message = game::Message,               // window messages first; true takes one
     .ui = app::DrawUi,                      // ImGui drawing each frame
     .pad = game::Pad,                       // changes a polled pad
-    .rumble = nullptr,                      // changes a rumble before it is set
+    .rumble = game::Rumble,                 // changes a rumble before it is set
 };

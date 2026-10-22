@@ -1,8 +1,11 @@
 // the options panel on F10
 #include <algorithm>
 #include <atomic>
+#include <cctype>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <map>
 #include <string>
 #include <utility>
@@ -20,6 +23,8 @@
 
 #include "app/app.h"
 #include "common/menu.h"
+#include "common/mouse_keyboard.h"
+#include "common/options.h"
 
 namespace app {
 
@@ -31,12 +36,28 @@ std::atomic<bool> g_open{false};
 bool g_display_held = false;
 Settings g_display;
 
+const char* const kPages[] = {"RECOMP SETTINGS", "MOUSE AND KEYBOARD"};
+constexpr int kPageCount = int(std::size(kPages));
+constexpr int kInputPage = 1;
+int g_page = 0;
+
+// the key binding in progress: its keys must be let go before the next press binds
+struct Capture {
+    std::atomic<int> action{-1};  // the row being rebound, -1 when idle
+    int slot = 0;  // its box: 0 the key, 1 the alternate
+    bool armed = false;
+    int done_frame = 0;  // frame of the last bind, the key that bound must not start another
+};
+Capture g_capture;
+int g_hovered_box = -1;  // the box under the mouse or focused with a key in it, this frame
+
 // the game's own pause menu: cream text, orange bars on a dark red panel
 constexpr ImVec4 kPanelBg{0.13f, 0.03f, 0.04f, 0.94f};
 constexpr ImVec4 kBorder{0.74f, 0.32f, 0.11f, 0.85f};
 constexpr ImVec4 kText{1.00f, 0.85f, 0.69f, 1.0f};
 constexpr ImVec4 kHighlight{0.27f, 0.12f, 0.08f, 1.0f};  // the title bar's orange at a quarter over the panel
 constexpr ImVec4 kHeading{0.78f, 0.52f, 0.23f, 1.0f};
+constexpr ImVec4 kDim{0.68f, 0.36f, 0.33f, 1.0f};  // the items not selected
 constexpr ImVec4 kField{0.22f, 0.06f, 0.05f, 1.0f};
 constexpr ImVec4 kFieldHovered{0.30f, 0.07f, 0.06f, 1.0f};
 constexpr ImVec4 kButton{0.30f, 0.07f, 0.06f, 1.0f};
@@ -69,6 +90,9 @@ const char* const kAnisoNames[] = {"GAME DEFAULT", "2x", "4x", "8x", "16x"};
 constexpr uint32_t kFpsCaps[] = {30, 60, 75, 90, 120, 144, 165, 240, 360, 0};
 const char* const kDisplayModeNames[] = {"FULLSCREEN", "BORDERLESS", "WINDOWED"};
 constexpr int kDisplayModeCount = int(std::size(kDisplayModeNames));
+
+constexpr int kTenthsPerUnit = 10;
+constexpr int kSensitivitySlots = 50;  // 0.1 to 5.0 in tenths
 
 constexpr int kRenderMin = 20;
 constexpr int kRenderMax = 200;
@@ -231,6 +255,35 @@ std::string StepMaxFps(Settings& s, int step) {
 
 std::string StepAniso(Settings& s, int step) { return kAnisoNames[StepTable(kAnisoValues, s.aniso, step)]; }
 
+std::string StepSkipIntros(Settings&, int step) {
+    bool& on = game::Opt().skip_intros;
+    if (step) on = !on;
+    return OnOff(on);
+}
+
+std::string SensitivityText(int tenths) {
+    char text[16];
+    std::snprintf(text, sizeof(text), "%.1f", float(tenths) / kTenthsPerUnit);
+    return text;
+}
+
+std::string StepSensitivity(Settings&, int step) {
+    float& sensitivity = game::Opt().mouse_sensitivity;
+    int tenths = int(std::lround(sensitivity * kTenthsPerUnit));
+    if (step) {
+        int slot = std::clamp(tenths, 1, kSensitivitySlots) - 1;
+        tenths = StepIndex(slot, step, kSensitivitySlots) + 1;
+        sensitivity = float(tenths) / kTenthsPerUnit;
+    }
+    return SensitivityText(tenths);
+}
+
+std::string StepInvertLook(Settings&, int step) {
+    bool& on = game::Opt().invert_mouse;
+    if (step) on = !on;
+    return OnOff(on);
+}
+
 // The rows. A value row's id picks its step, held rows wait for Apply.
 using StepFn = std::string (*)(Settings& s, int step);
 
@@ -241,6 +294,9 @@ enum RowId {
     kVsyncRow,
     kMaxFpsRow,
     kAnisoRow,
+    kSkipIntrosRow,
+    kSensitivityRow,
+    kInvertLookRow,
 };
 
 // in RowId order
@@ -251,11 +307,14 @@ constexpr StepFn kSteps[] = {
     StepVsync,
     StepMaxFps,
     StepAniso,
+    StepSkipIntros,
+    StepSensitivity,
+    StepInvertLook,
 };
 
 bool Held(int id) { return id == kDisplayModeRow || id == kResolutionRow; }
 
-enum class Kind { Heading, Value };
+enum class Kind { Heading, Value, Bind };
 struct Row {
     Kind kind;
     int id;
@@ -271,7 +330,33 @@ constexpr Row kSettingsRows[] = {
     {Kind::Value, kMaxFpsRow, "MAX FRAME RATE"},
     {Kind::Heading, -1, "GRAPHICS"},
     {Kind::Value, kAnisoRow, "ANISOTROPIC FILTERING"},
+    {Kind::Heading, -1, "GAME"},
+    {Kind::Value, kSkipIntrosRow, "SKIP INTROS"},
 };
+
+// the mouse rows, then a bind row for each keyboard and mouse action
+const std::vector<Row>& InputRows() {
+    static const std::vector<Row> list = [] {
+        std::vector<Row> out = {
+            {Kind::Heading, -1, "MOUSE"},
+            {Kind::Value, kSensitivityRow, "MOUSE SENSITIVITY"},
+            {Kind::Value, kInvertLookRow, "INVERT LOOK"},
+            {Kind::Heading, -1, "KEYBOARD"},
+        };
+        size_t count = 0;
+        const input::Action* actions = input::Actions(&count);
+        const char* section = nullptr;
+        for (size_t i = 0; i < count; i++) {
+            if (actions[i].section != section) {
+                section = actions[i].section;
+                out.push_back({Kind::Heading, -1, section});
+            }
+            out.push_back({Kind::Bind, int(i), actions[i].label});
+        }
+        return out;
+    }();
+    return list;
+}
 
 bool SameDisplay(const Settings& a, const Settings& b) {
     return a.display_mode == b.display_mode && a.width == b.width && a.height == b.height;
@@ -302,11 +387,22 @@ void Apply() {
     Save();
 }
 
-void RestoreDefaults() {
+void CancelCapture() { g_capture.action = -1; }
+
+void RestoreDefaults(int page) {
+    CancelCapture();
+    if (page == kInputPage) {
+        const game::Options defaults;
+        game::Opt().mouse_sensitivity = defaults.mouse_sensitivity;
+        game::Opt().invert_mouse = defaults.invert_mouse;
+        input::ResetBindings();
+        return;
+    }
     Settings& s = Get();
     std::string join_ip = s.join_ip;
     s = Settings{};
     s.join_ip = join_ip;
+    game::Opt().skip_intros = game::Options{}.skip_intros;
     g_display_held = false;
     ApplyDisplay();
     Save();
@@ -423,19 +519,197 @@ void DrawValueRow(const Row& row) {
     }
 }
 
+// Key bindings.
+
+constexpr const char* kUnbound = "UNBOUND";
+
+std::string KeyText(std::string keys) {
+    if (keys.empty()) return kUnbound;
+    for (char& c : keys) c = c == ',' ? '/' : char(std::toupper(uint8_t(c)));
+    return keys;
+}
+
+void StartCapture(int action, int slot) {
+    g_capture.action = action;
+    g_capture.slot = slot;
+    g_capture.armed = false;
+}
+
+void EndCapture() {
+    CancelCapture();
+    g_capture.done_frame = ImGui::GetFrameCount();
+}
+
+// a row or a tab was just bound or chosen: nothing may start on the frame after a bind
+bool BindingSettled() { return !Capturing() && ImGui::GetFrameCount() > g_capture.done_frame + 1; }
+
+// Escape cancels, any other bindable key or mouse button binds
+void PollCapture() {
+    if (!Capturing()) return;
+    int vk = input::PressedKey();
+    if (!g_capture.armed) {
+        g_capture.armed = vk == 0;
+        return;
+    }
+    if (vk == 0) return;
+    if (vk != VK_ESCAPE) input::Bind(size_t(g_capture.action.load()), vk, g_capture.slot);
+    EndCapture();
+}
+
+// the action's key and its alternate as their boxes show them, the alternate blank when there is none
+std::vector<std::string> KeyBoxes(size_t action) {
+    std::string keys = input::Binding(action);
+    size_t comma = keys.find(',');
+    std::string second;
+    if (comma != std::string::npos) second = keys.substr(comma + 1);
+    second = second.substr(0, second.find(','));
+    if (!second.empty()) second = KeyText(second);
+    return {KeyText(keys.substr(0, comma)), second};
+}
+
+constexpr float kKeyBoxEms = 10.0f;  // a key box's width when the row has two
+
+struct KeyBox {
+    float x;
+    float width;
+    bool capturing;
+};
+
+// what one box saw this frame
+struct BoxInput {
+    bool pressed = false;
+    bool cleared = false;  // right clicked, or Delete while focused
+    bool pointed = false;  // under the mouse or focused
+};
+
+// lit while focused, hovered or capturing
+BoxInput DrawKeyBox(const RowLayout& row, const KeyBox& box, const std::string& key) {
+    ImGui::SetCursorPos(ImVec2(box.x, row.origin.y));
+    BoxInput seen;
+    seen.pressed = ImGui::InvisibleButton("##key", ImVec2(box.width, row.height));
+    bool deleted = ImGui::IsItemFocused() && ImGui::IsKeyPressed(ImGuiKey_Delete, false);
+    seen.cleared = ImGui::IsItemClicked(ImGuiMouseButton_Right) || deleted;
+    seen.pointed = ImGui::IsItemHovered() || ImGui::IsItemFocused();
+    bool lit = box.capturing || ImGui::IsItemFocused() || ImGui::IsItemHovered();
+    ImU32 fill = ImGui::GetColorU32(lit ? ImGuiCol_Header : ImGuiCol_FrameBg);
+    ImGui::GetWindowDrawList()->AddRectFilled(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), fill);
+    std::string text = box.capturing ? "PRESS A KEY" : key;
+    float centred = (box.width - ImGui::CalcTextSize(text.c_str()).x) * 0.5f;
+    ImGui::SetCursorPos(ImVec2(box.x + std::max(centred, 0.0f), row.origin.y));
+    ImGui::AlignTextToFramePadding();
+    if (box.capturing) ImGui::PushStyleColor(ImGuiCol_Text, kHeading);
+    ImGui::TextUnformatted(text.c_str());
+    if (box.capturing) ImGui::PopStyleColor();
+    return seen;
+}
+
+// what a bind row's boxes saw this frame, each a box or -1
+struct BindInput {
+    int pressed = -1;
+    int cleared = -1;
+    int pointed = -1;  // only a box with a key in it
+};
+
+// label left, a box per key (the key and its alternate side by side) ending where the other rows' values do;
+// Enter or a click on a box starts its capture, a right click or Delete clears it
+BindInput BindRow(const char* label, const std::vector<std::string>& keys, int capturing) {
+    RowLayout row = MeasureRow();
+    ImGui::PushID(label);
+    DrawLabel(row, label);
+    int count = int(keys.size());
+    float spacing = ImGui::GetStyle().ItemSpacing.x;
+    float width = count > 1 ? ImGui::GetFontSize() * kKeyBoxEms : row.value_width;
+    float end = row.value_x + row.value_width;
+    BindInput seen;
+    for (int i = 0; i < count; i++) {
+        const std::string& key = keys[size_t(i)];
+        float x = end - float(count - i) * width - float(count - 1 - i) * spacing;
+        ImGui::PushID(i);
+        BoxInput box = DrawKeyBox(row, {x, width, capturing == i}, key);
+        ImGui::PopID();
+        if (box.pressed) seen.pressed = i;
+        if (box.cleared) seen.cleared = i;
+        if (box.pointed && !key.empty() && key != kUnbound) seen.pointed = i;
+    }
+    EndRow(row);
+    return seen;
+}
+
+void DrawBindRow(const Row& row) {
+    int capturing = g_capture.action == row.id ? g_capture.slot : -1;
+    BindInput seen = BindRow(row.label, KeyBoxes(size_t(row.id)), capturing);
+    if (seen.pointed >= 0) g_hovered_box = seen.pointed;
+    // a Delete that answered a capture is no clear
+    if (seen.cleared >= 0 && BindingSettled()) input::Bind(size_t(row.id), 0, seen.cleared);
+    if (seen.pressed >= 0 && BindingSettled()) StartCapture(row.id, seen.pressed);
+}
+
 void DrawRow(const Row& row) {
     if (row.kind == Kind::Heading) {
         DrawHeading(row.label);
+    } else if (row.kind == Kind::Bind) {
+        DrawBindRow(row);
     } else {
         DrawValueRow(row);
     }
 }
 
+// Pages. LB and RB step the tabs, one tab a page as wide as they share the line.
+
+int TabStep() {
+    return int(ImGui::IsKeyPressed(ImGuiKey_GamepadR1, false)) - int(ImGui::IsKeyPressed(ImGuiKey_GamepadL1, false));
+}
+
+// the page's tab, selected by a step when stepped is set; a click selects it
+void DrawTab(int page, float width, bool stepped) {
+    ImGui::SetNextItemWidth(width);
+    ImGuiTabItemFlags flags = stepped && page == g_page ? ImGuiTabItemFlags_SetSelected : 0;
+    if (!ImGui::BeginTabItem(kPages[page], nullptr, flags)) return;
+    bool clicked = !stepped && page != g_page;
+    if (clicked) {
+        g_page = page;
+        CancelCapture();
+    }
+    ImGui::EndTabItem();
+}
+
+void DrawTabs() {
+    // a selection made here shows from the next frame, the tab drawn this one still reads as selected
+    int step = TabStep();
+    bool stepped = step != 0 && BindingSettled();
+    if (stepped) g_page = StepIndex(g_page, step, kPageCount);
+    ImGui::PushStyleColor(ImGuiCol_Tab, kField);
+    ImGui::PushStyleColor(ImGuiCol_TabHovered, kFieldHovered);
+    ImGui::PushStyleColor(ImGuiCol_TabSelected, kHighlight);
+    ImGui::PushStyleColor(ImGuiCol_TabSelectedOverline, kHeading);
+    ImGui::PushStyleVar(ImGuiStyleVar_TabRounding, 0.0f);
+    if (ImGui::BeginTabBar("##pages")) {
+        float spacing = ImGui::GetStyle().ItemInnerSpacing.x * float(kPageCount - 1);
+        float width = (ImGui::GetContentRegionAvail().x - spacing) / float(kPageCount);
+        for (int page = 0; page < kPageCount; page++) DrawTab(page, width, stepped);
+        ImGui::EndTabBar();
+    }
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(4);
+}
+
 void DrawTitle() {
-    const char* title = "RECOMP SETTINGS";
+    const char* title = "SETTINGS";
     float spare = ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(title).x;
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(spare * 0.5f, 0.0f));
     ImGui::TextUnformatted(title);
+}
+
+void DrawHint() {
+    const char* hint = "";
+    if (Capturing()) {
+        hint = "Press a key or mouse button to bind, Escape cancels";
+    } else if (g_page == kInputPage && g_hovered_box >= 0) {
+        hint = "Right click or Delete clears the key";
+    }
+    ImGui::PushStyleColor(ImGuiCol_Text, kDim);
+    ImGui::TextUnformatted(hint);
+    ImGui::PopStyleColor();
 }
 
 void DrawFooter() {
@@ -446,7 +720,7 @@ void DrawFooter() {
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(spare, 0.0f));
     if (ImGui::Button("Back", ImVec2(button_width, 0))) ToggleMenu();
     ImGui::SameLine();
-    if (ImGui::Button("Defaults", ImVec2(button_width, 0))) RestoreDefaults();
+    if (ImGui::Button("Defaults", ImVec2(button_width, 0))) RestoreDefaults(g_page);
     ImGui::SameLine();
     ImGui::BeginDisabled(!g_display_held);
     if (ImGui::Button("Apply", ImVec2(button_width, 0))) Apply();
@@ -476,11 +750,18 @@ void DrawPanel() {
     PanelStyle style;
     if (ImGui::Begin("##settings", nullptr, kWindowFlags)) {
         DrawTitle();
-        float footer = ImGui::GetFrameHeightWithSpacing() + em;
+        DrawTabs();
+        float footer = ImGui::GetTextLineHeightWithSpacing() + ImGui::GetFrameHeightWithSpacing() + em;
         ImGui::BeginChild("##rows", ImVec2(0, -footer), ImGuiChildFlags_NavFlattened);
-        for (const Row& row : kSettingsRows) DrawRow(row);
+        g_hovered_box = -1;
+        if (g_page == kInputPage) {
+            for (const Row& row : InputRows()) DrawRow(row);
+        } else {
+            for (const Row& row : kSettingsRows) DrawRow(row);
+        }
         ImGui::EndChild();
         ImGui::Separator();
+        DrawHint();
         DrawFooter();
     }
     ImGui::End();
@@ -490,15 +771,36 @@ void DrawPanel() {
 
 bool MenuOpen() { return g_open.load(std::memory_order_relaxed); }
 
+bool Capturing() { return g_capture.action >= 0; }
+
+void RefreshCursor() {
+    void* hwnd = Window();
+    if (hwnd) PostMessageW(HWND(hwnd), WM_SETCURSOR, WPARAM(hwnd), MAKELPARAM(HTCLIENT, WM_MOUSEMOVE));
+}
+
 void ToggleMenu() {
     g_open.store(!MenuOpen(), std::memory_order_relaxed);
     g_display_held = false;
+    CancelCapture();
+    input::Settle();
+    RefreshCursor();
+}
+
+// ImGui sets the cursor only while the panel is open
+void UpdateCursorFlag(ImGuiIO& io) {
+    if (MenuOpen()) {
+        io.ConfigFlags &= ~ImGuiConfigFlags_NoMouseCursorChange;
+    } else {
+        io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+    }
 }
 
 void DrawUi(double) {
     ImGuiIO& io = ImGui::GetIO();
+    UpdateCursorFlag(io);
     io.KeyRepeatRate = kRepeatSeconds;
     io.FontGlobalScale = std::max(kMinFontScale, io.DisplaySize.y / kFontScaleLines);
+    PollCapture();
     if (MenuOpen()) DrawPanel();
 }
 
