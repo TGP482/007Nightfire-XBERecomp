@@ -71,9 +71,21 @@ bool Message(void*, uint32_t msg, uintptr_t wp, intptr_t lp, intptr_t* result) {
     return false;
 }
 
-// the game sees no input while the panel is open
-void Pad(int, input::Pad& pad) {
+// port 0 has the keyboard, so it is there without a controller; the game sees no input while the panel is open
+void Pad(int port, input::Pad& pad) {
+    input::SeenPad(pad);
+    if (port == 0) pad.connected = true;
     if (app::MenuOpen()) pad = input::Pad{.connected = pad.connected};
+    else if (port == 0) input::ImageKeys(pad);
+}
+
+// the controller keeps still while the keyboard and mouse were used last
+void Rumble(int port, uint16_t& left, uint16_t& right) {
+    if (port != 0 || !input::KeyboardActive()) return;
+    left = 0;
+    right = 0;
+}
+
 // what the options list cannot hold
 void Load(const void* table) {
     const toml::table& t = *static_cast<const toml::table*>(table);
