@@ -284,6 +284,61 @@ std::string StepInvertLook(Settings&, int step) {
     return OnOff(on);
 }
 
+// INPUT DEVICES: what each player port has plugged in. A step goes to the next choice whose devices no other
+// player has; player 1 never has none, so something always drives the game.
+constexpr game::PlayerPort kPortChoices[] = {{false, -1}, {true, 0},  {true, 1},  {true, 2},  {true, 3},
+                                             {true, -1},  {false, 0}, {false, 1}, {false, 2}, {false, 3}};
+
+std::string PortText(const game::PlayerPort& p) {
+    if (p.keyboard && p.pad >= 0) return "KEYBOARD + CONTROLLER " + std::to_string(p.pad + 1);
+    if (p.keyboard) return "KEYBOARD";
+    if (p.pad >= 0) return "CONTROLLER " + std::to_string(p.pad + 1);
+    return "NOT CONNECTED";
+}
+
+bool SamePort(const game::PlayerPort& a, const game::PlayerPort& b) {
+    return a.keyboard == b.keyboard && a.pad == b.pad;
+}
+
+bool SharesDevice(const game::PlayerPort& a, const game::PlayerPort& b) {
+    return (a.keyboard && b.keyboard) || (a.pad >= 0 && a.pad == b.pad);
+}
+
+bool Available(int player, const game::PlayerPort& choice) {
+    bool empty = !choice.keyboard && choice.pad < 0;
+    if (player == 0 && empty) return false;
+    if (choice.pad >= 0 && !game::ControllerPlugged(choice.pad)) return false;
+    const auto& players = game::Opt().players;
+    for (int other = 0; other < game::kPlayers; other++) {
+        if (other != player && SharesDevice(choice, players[size_t(other)])) return false;
+    }
+    return true;
+}
+
+std::string StepPlayer(int player, int step) {
+    game::PlayerPort& port = game::Opt().players[size_t(player)];
+    constexpr int count = int(std::size(kPortChoices));
+    int index = 0;
+    for (int i = 0; i < count; i++) {
+        if (SamePort(kPortChoices[i], port)) index = i;
+    }
+    for (int tries = 1; step && tries < count; tries++) {
+        index = StepIndex(index, step, count);
+        if (Available(player, kPortChoices[index])) {
+            port = kPortChoices[index];
+            break;
+        }
+    }
+    std::string text = PortText(port);
+    bool unplugged = port.pad >= 0 && !game::ControllerPlugged(port.pad);
+    return unplugged ? text + " (UNPLUGGED)" : text;
+}
+
+template <int Player>
+std::string StepPlayerPort(Settings&, int step) {
+    return StepPlayer(Player, step);
+}
+
 // The rows. A value row's id picks its step, held rows wait for Apply.
 using StepFn = std::string (*)(Settings& s, int step);
 
@@ -297,6 +352,10 @@ enum RowId {
     kSkipIntrosRow,
     kSensitivityRow,
     kInvertLookRow,
+    kPlayer1Row,
+    kPlayer2Row,
+    kPlayer3Row,
+    kPlayer4Row,
 };
 
 // in RowId order
@@ -310,6 +369,10 @@ constexpr StepFn kSteps[] = {
     StepSkipIntros,
     StepSensitivity,
     StepInvertLook,
+    StepPlayerPort<0>,
+    StepPlayerPort<1>,
+    StepPlayerPort<2>,
+    StepPlayerPort<3>,
 };
 
 bool Held(int id) { return id == kDisplayModeRow || id == kResolutionRow; }
@@ -332,6 +395,11 @@ constexpr Row kSettingsRows[] = {
     {Kind::Value, kAnisoRow, "ANISOTROPIC FILTERING"},
     {Kind::Heading, -1, "GAME"},
     {Kind::Value, kSkipIntrosRow, "SKIP INTROS"},
+    {Kind::Heading, -1, "INPUT DEVICES"},
+    {Kind::Value, kPlayer1Row, "PLAYER 1"},
+    {Kind::Value, kPlayer2Row, "PLAYER 2"},
+    {Kind::Value, kPlayer3Row, "PLAYER 3"},
+    {Kind::Value, kPlayer4Row, "PLAYER 4"},
 };
 
 // the mouse rows, then a bind row for each keyboard and mouse action
@@ -403,6 +471,7 @@ void RestoreDefaults(int page) {
     s = Settings{};
     s.join_ip = join_ip;
     game::Opt().skip_intros = game::Options{}.skip_intros;
+    game::Opt().players = game::Options{}.players;
     g_display_held = false;
     ApplyDisplay();
     Save();

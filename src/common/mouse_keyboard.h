@@ -6,7 +6,7 @@
 
 #include "core/input.h"
 
-// the keyboard and mouse as player 1's actions in the game
+// the keyboard and mouse as their player's actions in the game
 namespace input {
 
 constexpr size_t kActionValues = 40;  // the game's actions a player, see Keyboard
@@ -14,7 +14,7 @@ constexpr size_t kActionValues = 40;  // the game's actions a player, see Keyboa
 void StartMouse(void* hwnd);    // window thread, the game window is up
 void OnRawInput(void* handle);  // window thread, WM_INPUT
 void Settle();                  // the game lost the input: the cursor goes free, held keys wait for release
-// the bound keys held now, as amounts to add to player 1's kActionValues action values once the game's controller
+// the bound keys held now, as amounts to add to their player's kActionValues action values once the game's controller
 // layout has made them from the pad; in a menu the pause key backs out instead
 void Keyboard(float* values, bool menu);
 // the reload and action keys as of the last Keyboard, in the game's state bits (1 held, 4 pressed): the game has one
@@ -36,9 +36,11 @@ void MoveCursorDown(float y);  // to this height of the shown frame, 0 to 1, whe
 bool LeftButton();  // held in the game window
 // the keys bound to the action with this id are held and the game has the input
 bool Held(std::string_view id);
-// each image's own: its keys onto port 0's pad, while the settings panel is closed. default.xbe's keys join its
-// actions instead (src\game\keyboard.cpp), Driving.xbe's are src\driving\keyboard.cpp.
+// each image's own: its keys onto the keyboard's port's pad, while the settings panel is closed. default.xbe's keys
+// join its actions instead (src\game\keyboard.cpp), Driving.xbe's are src\driving\keyboard.cpp.
 void ImageKeys(Pad& pad);
+// default.xbe's: the player the game reads from the keyboard's port, -1 for none (src\game\keyboard.cpp)
+int KeyboardPlayer();
 
 // actions the keyboard and mouse can be bound to, key names comma separated
 // letter, digit and symbol keys bind by position as the US key there; Binding shows the player's labels

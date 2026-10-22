@@ -2,6 +2,7 @@
 #include <chrono>
 
 #include "common/mouse_keyboard.h"
+#include "common/options.h"
 #include "xdk/hle.h"
 
 // The keys join the game's actions after its controller layout has made them from the pad (0xDE720, a switch on the
@@ -10,6 +11,11 @@ namespace {
 
 constexpr uint32_t kPlayer1Actions = 0x1FE6E4;  // floats; 0x6CF50 clamps them to -1..1 and finds the presses next
 constexpr uint32_t kPlayer1States = 0x1FE7D4;   // a byte of state bits each: 1 held, 4 pressed, 8 repeating
+constexpr uint32_t kPlayerBlock = 0x158;  // the four players' blocks follow player 1's
+constexpr uint32_t kPlayers = 4;
+// byte: the controller port 0xDE720 reads the block from. The front end's menus set ports 0 to 3 in order, single
+// player puts the port that last used them in player 1's (0x7CD50), multiplayer moves each joined port's block up.
+constexpr uint32_t kBlockPort = 0x142;
 constexpr uint8_t kPressed = 4;
 constexpr int64_t kMenuMs = 250;  // a menu reads its keys each frame it is up
 std::atomic<int64_t> g_menu_ms{0};  // the last read
@@ -47,6 +53,13 @@ bool StartCloses() {
 
 void input::ImageKeys(Pad&) {}
 
+int input::KeyboardPlayer() {
+    int port = game::KeyboardPort();
+    for (uint32_t p = 0; port >= 0 && p < kPlayers; p++)
+        if (kernel::G<uint8_t>(kPlayer1Actions + p * kPlayerBlock + kBlockPort) == port) return int(p);
+    return -1;
+}
+
 // the menus' key reader: (player, action, state bits 1 held, 4 pressed, 8 repeating)
 X86_EXTERN_FUNC(__imp__sub_00072E20);
 X86_FUNC(sub_00072E20) {
@@ -60,7 +73,10 @@ X86_FUNC(sub_000DE720) {
     input::SetMenu(MenuUp());
     float keys[input::kActionValues] = {};
     input::Keyboard(keys, NowMs() - g_menu_ms < kMenuMs && !StartCloses());
-    for (uint32_t i = 0; i < input::kActionValues; i++) kernel::G<float>(kPlayer1Actions + i * 4) += keys[i];
+    int player = input::KeyboardPlayer();
+    if (player < 0) return;
+    uint32_t actions = kPlayer1Actions + uint32_t(player) * kPlayerBlock;
+    for (uint32_t i = 0; i < input::kActionValues; i++) kernel::G<float>(actions + i * 4) += keys[i];
 }
 
 // (player, value, state bits): nonzero in ax when the value has any of the bits
@@ -71,7 +87,7 @@ X86_FUNC(sub_0006C9A0) {
     uint32_t value = kernel::R32(ctx.esp + 8);
     uint8_t bits = kernel::G<uint8_t>(ctx.esp + 12);
     __imp__sub_0006C9A0(ctx, base);
-    if (player != 0 || value != kReloadAction) return;
+    if (value != kReloadAction || player != input::KeyboardPlayer()) return;
     uint8_t keys = input::ActionKey();
     if (read == kReloadRead) keys |= input::ReloadKey();
     if (keys & bits) ctx.eax = (ctx.eax & 0xFFFF0000u) | 1;
@@ -81,11 +97,13 @@ X86_FUNC(sub_0006C9A0) {
 // both, as on the console.
 X86_EXTERN_FUNC(__imp__sub_000B86B0);
 X86_FUNC(sub_000B86B0) {
-    bool player1 = kernel::G<int8_t>(ctx.eax + kControllerPlayer) == 0;
-    bool button = kernel::G<uint8_t>(kPlayer1States + kReloadAction) & kPressed;
+    int player = kernel::G<int8_t>(ctx.eax + kControllerPlayer);
+    bool keyboard = player == input::KeyboardPlayer();
+    uint32_t states = kPlayer1States + uint32_t(player) * kPlayerBlock;
+    bool button = keyboard && (kernel::G<uint8_t>(states + kReloadAction) & kPressed);
     bool reload = input::ReloadKey() & kPressed;
     bool action = input::ActionKey() & kPressed;
-    if (!player1 || button || reload == action) {
+    if (!keyboard || button || reload == action) {
         __imp__sub_000B86B0(ctx, base);
     } else if (reload) {
         kernel::Return(ctx, 0, 0);

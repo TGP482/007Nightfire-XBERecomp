@@ -72,6 +72,7 @@ constexpr int kRowSlack = 7;  // the rows are 17 high and 29 apart: the gaps go 
 // player 1's action values and their state bits, as the menus read them (0x72D70); 0x6CF50 makes both anew each frame
 constexpr uint32_t kActions = 0x1FE6E4;
 constexpr uint32_t kStates = 0x1FE7D4;
+constexpr uint32_t kPlayerBlock = 0x158;  // the other players' follow
 constexpr uint32_t kAccept = 31;
 constexpr uint8_t kHeldPressed = 1 | 4;
 // view 7 draws the menus; on a widescreen output hud.cpp draws its sprites at 4:3 around its middle
@@ -178,10 +179,13 @@ uint32_t CarouselRowAt(uint32_t page, int px, int py) {
     return 0;
 }
 
-// one frame of an action, as if pressed; the page's widgets read it next
+// one frame of an action, as if the keyboard's player pressed it; the page's widgets read it next
 void Tap(uint32_t value) {
-    G<float>(kActions + value * 4) = 1.0f;
-    G<uint8_t>(kStates + value) |= kHeldPressed;
+    int player = input::KeyboardPlayer();
+    if (player < 0) return;
+    uint32_t block = uint32_t(player) * kPlayerBlock;
+    G<float>(kActions + block + value * 4) = 1.0f;
+    G<uint8_t>(kStates + block + value) |= kHeldPressed;
 }
 
 bool Accepts(uint8_t type) {

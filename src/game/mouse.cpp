@@ -25,6 +25,7 @@ constexpr float kQuarterTurnsPerRadian = 0.63661975f;
 
 // the game's Auto Aim setting, player 1's; the second while 0x260018 is set
 constexpr uint32_t kAutoAim[] = {0x1FE6D1, 0x1FE6D2};
+constexpr uint32_t kPlayerSettings = 0x158;  // apart, as the players' action blocks
 
 bool Looks(uint16_t state) { return state < 8 || (state > 12 && state != 16); }
 
@@ -38,7 +39,7 @@ X86_FUNC(sub_000B7610) {
     uint32_t controller = kernel::R32(player + kPlayerController);
     float dx;
     float dy;
-    if (G<int8_t>(controller + kControllerPlayer) != 0 || !input::TakeMouse(dx, dy)) return;
+    if (G<int8_t>(controller + kControllerPlayer) != input::KeyboardPlayer() || !input::TakeMouse(dx, dy)) return;
     if (!Looks(G<uint16_t>(player + kPlayerState))) return;
     float per_count = kRadiansPerCount / std::max(G<float>(controller + kControllerZoom), 1.0f);
     G<float>(controller + kControllerYawStep) -= dx * per_count;
@@ -51,12 +52,14 @@ X86_FUNC(sub_000B7610) {
 X86_EXTERN_FUNC(__imp__sub_000B9950);
 X86_FUNC(sub_000B9950) {
     uint32_t controller = kernel::R32(kernel::R32(ctx.esp + 4) + kPlayerController);
-    if (G<int8_t>(controller + kControllerPlayer) != 0 || !input::KeyboardActive()) {
+    int player = G<int8_t>(controller + kControllerPlayer);
+    if (player != input::KeyboardPlayer() || !input::KeyboardActive()) {
         __imp__sub_000B9950(ctx, base);
         return;
     }
+    uint32_t own = uint32_t(player) * kPlayerSettings;
     uint8_t setting[std::size(kAutoAim)];
-    for (size_t i = 0; i < std::size(kAutoAim); i++) setting[i] = std::exchange(G<uint8_t>(kAutoAim[i]), 0);
+    for (size_t i = 0; i < std::size(kAutoAim); i++) setting[i] = std::exchange(G<uint8_t>(kAutoAim[i] + own), 0);
     __imp__sub_000B9950(ctx, base);
-    for (size_t i = 0; i < std::size(kAutoAim); i++) G<uint8_t>(kAutoAim[i]) = setting[i];
+    for (size_t i = 0; i < std::size(kAutoAim); i++) G<uint8_t>(kAutoAim[i] + own) = setting[i];
 }
