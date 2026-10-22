@@ -15,6 +15,7 @@
 
 #include "app/app.h"
 #include "common/menu.h"
+#include "common/monitor.h"
 #include "common/mouse_keyboard.h"
 #include "common/options.h"
 #include "core/input.h"
@@ -25,6 +26,7 @@ namespace {
 
 constexpr intptr_t kKeyWasDown = 1 << 30;  // bit 30 of a key message's lparam: a repeat
 constexpr uintptr_t kSysCommandMask = 0xFFF0;  // the low bits of a WM_SYSCOMMAND code are the system's
+constexpr uint32_t kHostApplyDisplay = WM_APP + 1;  // main.cpp's kApplyDisplay
 
 bool Take(intptr_t* result) {
     *result = 0;
@@ -51,8 +53,15 @@ bool SwallowKeyMenu(uintptr_t command, intptr_t* result) {
     return Take(result);
 }
 
-bool Message(void*, uint32_t msg, uintptr_t wp, intptr_t lp, intptr_t* result) {
+bool Message(void* hwnd, uint32_t msg, uintptr_t wp, intptr_t lp, intptr_t* result) {
     switch (msg) {
+        case WM_CREATE:
+            UpdateSplashMonitor();
+            UpdateWindowMonitor(hwnd);
+            return false;
+        case kHostApplyDisplay:
+            UpdateWindowMonitor(hwnd);
+            return false;
         case WM_KEYDOWN:
         case WM_SYSKEYDOWN:
             return PanelKeyDown(msg, wp, lp, result);
