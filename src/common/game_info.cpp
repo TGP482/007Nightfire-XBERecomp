@@ -48,7 +48,23 @@ bool Message(void*, uint32_t msg, uintptr_t wp, intptr_t lp, intptr_t* result) {
         case WM_SYSKEYDOWN:
             return PanelKeyDown(msg, wp, lp, result);
         case WM_SYSCOMMAND:
+            LogClose(msg, wp);
             return SwallowKeyMenu(wp, result);
+        case WM_CLOSE:
+            LogClose(msg, wp);
+            return false;
+        case WM_INPUT:
+            input::OnRawInput(reinterpret_cast<void*>(lp));
+            return false;
+        case WM_ACTIVATE:
+            if (LOWORD(wp) == WA_INACTIVE) input::Settle();
+            return false;
+        case WM_SETCURSOR:
+            // the game has no pointer of its own; the panel and the game's menus show the arrow
+            if (LOWORD(lp) != HTCLIENT) return false;
+            SetCursor(app::MenuOpen() || input::CursorShown() ? LoadCursorW(nullptr, MAKEINTRESOURCEW(32512)) : nullptr);
+            *result = TRUE;
+            return true;
     }
     return false;
 }
@@ -56,6 +72,22 @@ bool Message(void*, uint32_t msg, uintptr_t wp, intptr_t lp, intptr_t* result) {
 // the game sees no input while the panel is open
 void Pad(int, input::Pad& pad) {
     if (app::MenuOpen()) pad = input::Pad{.connected = pad.connected};
+// what the options list cannot hold
+void Load(const void* table) {
+    const toml::table& t = *static_cast<const toml::table*>(table);
+    Options& o = Opt();
+    o.mouse_sensitivity = float(t["mouse_sensitivity"].value_or(double(o.mouse_sensitivity)));
+    if (const toml::table* keys = t["keys"].as_table())
+        for (auto&& [id, value] : *keys)
+            if (auto v = value.value<std::string>()) o.keys[std::string(id.str())] = *v;
+}
+
+void Save(void* table) {
+    toml::table& t = *static_cast<toml::table*>(table);
+    t.insert("mouse_sensitivity", double(Opt().mouse_sensitivity));
+    toml::table keys;
+    for (const auto& [id, value] : Opt().keys) keys.insert(id, value);
+    t.insert("keys", keys);
 }
 
 }  // namespace
