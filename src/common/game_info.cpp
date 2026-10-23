@@ -214,8 +214,8 @@ int KeyboardPort() {
 
 // what the runtime asks of the game; strings must be set, hooks may stay null
 const app::GameInfo app::kGame = {
-    .title = L"007: NightFire - XBE Recomp", // window, splash and compiler
-    .short_title = L"007 NightFire",        // message boxes
+    .title = L"007: Nightfire - XBE Recomp", // window, splash and compiler
+    .short_title = L"007 Nightfire",        // message boxes
     .name = L"007Nightfire",                // window classes, crash dumps, handover event
     .log = "007nightfire",                  // log file prefix
     .settings = "settings.toml",            // settings file beside the exe

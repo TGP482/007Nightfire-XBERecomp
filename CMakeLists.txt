@@ -1,4 +1,4 @@
-# 007: NightFire (original Xbox), statically recompiled
+# 007: Nightfire (original Xbox), statically recompiled
 
 cmake_minimum_required(VERSION 3.25)
 project(nightfire LANGUAGES C CXX RC)

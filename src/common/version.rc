@@ -8,8 +8,8 @@ BEGIN
     BEGIN
         BLOCK "040904B0"
         BEGIN
-            VALUE "FileDescription", "007: NightFire - XBE Recomp"
-            VALUE "ProductName", "007: NightFire - XBE Recomp"
+            VALUE "FileDescription", "007: Nightfire - XBE Recomp"
+            VALUE "ProductName", "007: Nightfire - XBE Recomp"
             VALUE "ProductVersion", NIGHTFIRE_COMMIT
         END
     END
