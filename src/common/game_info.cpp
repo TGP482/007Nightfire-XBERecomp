@@ -224,6 +224,7 @@ const app::GameInfo app::kGame = {
     .images = {{"default.xbe", "007Nightfire"},  // each recompiled xbe and its exe, for title launches
                {"Driving.xbe", "007NightfireDriving"}},
     .options = {{"skip_intros", &game::Opt().skip_intros, nullptr},
+                {"fps_counter", &game::Opt().fps_counter, nullptr},
                 {"invert_mouse", &game::Opt().invert_mouse, nullptr}},  // game settings kept in the settings file
     .load = game::Load,                     // reads more from the settings file's toml::table
     .save = game::Save,                     // writes more into it

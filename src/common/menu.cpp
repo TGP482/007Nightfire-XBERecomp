@@ -89,7 +89,7 @@ constexpr std::pair<ImGuiCol, ImVec4> kPanelColors[] = {
 
 constexpr uint32_t kAnisoValues[] = {0, 2, 4, 8, 16};
 const char* const kAnisoNames[] = {"GAME DEFAULT", "2x", "4x", "8x", "16x"};
-constexpr uint32_t kFpsCaps[] = {30, 60, 75, 90, 120, 144, 165, 240, 360, 0};
+constexpr uint32_t kFpsCaps[] = {30, 60, 75, 90, 120, 144, 165, 240, 360, kFpsCapRefresh, 0};
 const char* const kDisplayModeNames[] = {"FULLSCREEN", "BORDERLESS", "WINDOWED"};
 constexpr int kDisplayModeCount = int(std::size(kDisplayModeNames));
 
@@ -283,7 +283,14 @@ std::string StepVsync(Settings& s, int step) {
 
 std::string StepMaxFps(Settings& s, int step) {
     uint32_t cap = kFpsCaps[StepTable(kFpsCaps, s.fps_cap, step)];
+    if (cap == kFpsCapRefresh) return "REFRESH RATE";
     return cap ? std::to_string(cap) : "UNLIMITED";
+}
+
+std::string StepFpsCounter(Settings&, int step) {
+    bool& on = game::Opt().fps_counter;
+    if (step) on = !on;
+    return OnOff(on);
 }
 
 std::string StepAniso(Settings& s, int step) { return kAnisoNames[StepTable(kAnisoValues, s.aniso, step)]; }
@@ -390,6 +397,7 @@ enum RowId {
     kPlayer2Row,
     kPlayer3Row,
     kPlayer4Row,
+    kFpsCounterRow,
 };
 
 // in RowId order
@@ -408,6 +416,7 @@ constexpr StepFn kSteps[] = {
     StepPlayerPort<1>,
     StepPlayerPort<2>,
     StepPlayerPort<3>,
+    StepFpsCounter,
 };
 
 bool Held(int id) { return id == kMonitorRow || id == kDisplayModeRow || id == kResolutionRow; }
@@ -427,6 +436,7 @@ constexpr Row kSettingsRows[] = {
     {Kind::Value, kRenderResolutionRow, "RENDER RESOLUTION"},
     {Kind::Value, kVsyncRow, "VERTICAL SYNC"},
     {Kind::Value, kMaxFpsRow, "MAX FRAME RATE"},
+    {Kind::Value, kFpsCounterRow, "FPS COUNTER"},
     {Kind::Heading, -1, "GRAPHICS"},
     {Kind::Value, kAnisoRow, "ANISOTROPIC FILTERING"},
     {Kind::Heading, -1, "GAME"},
@@ -509,6 +519,7 @@ void RestoreDefaults(int page) {
     s = Settings{};
     s.join_ip = join_ip;
     game::Opt().skip_intros = game::Options{}.skip_intros;
+    game::Opt().fps_counter = game::Options{}.fps_counter;
     game::Opt().monitor = game::Options{}.monitor;
     game::Opt().players = game::Options{}.players;
     g_display_held = false;
@@ -903,7 +914,8 @@ void UpdateCursorFlag(ImGuiIO& io) {
     }
 }
 
-void DrawUi(double) {
+void DrawUi(double fps) {
+    game::g_fps = float(fps);
     ImGuiIO& io = ImGui::GetIO();
     UpdateCursorFlag(io);
     io.KeyRepeatRate = kRepeatSeconds;

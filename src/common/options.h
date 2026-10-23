@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include <atomic>
 #include <map>
 #include <string>
 
@@ -15,6 +16,7 @@ inline constexpr int kPlayers = 4;  // the console's controller ports
 
 struct Options {
     bool skip_intros = false;  // the EA GAMES and MGM INTERACTIVE logos at boot
+    bool fps_counter = false;
     float mouse_sensitivity = 1.0f;
     bool invert_mouse = false;
     std::string monitor;  // its device name, \\.\DISPLAY2; empty the primary
@@ -24,5 +26,6 @@ struct Options {
 Options& Opt();
 bool ControllerPlugged(int slot);  // game_info.cpp
 int KeyboardPort();  // game_info.cpp: the port with the keyboard, -1 for none
+inline std::atomic<float> g_fps{0};  // from the host, for the game's own counter
 
 }  // namespace game
