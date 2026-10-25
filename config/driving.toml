@@ -294,6 +294,11 @@ at = 0xDEA1C
 call = "DrivingTabStrip"
 on_true = 0xDEBB8
 
+# the field of view setting widens the views (src/driving/fov.cpp)
+[[hook]]
+at = 0x96F76
+call = "DrivingFov"
+
 # argument locations in API order for functions a link time code generated library compiled with another
 # convention: a register (eax ebx ecx edx esi edi ebp) or "stack" for the next stack slot, which the callee pops
 [abi]
