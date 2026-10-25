@@ -60,6 +60,10 @@ constexpr float kNarrow = 0.75f;  // 4:3 of a 16:9 frame
 constexpr float kFrameMiddleX = 320;
 constexpr float kFrameMiddleY = 240;
 constexpr uint32_t kFmvFill = 0;
+constexpr uint32_t kFmv43 = 1;
+// a menu page's background film (page +0xC4) loops (0x93115); the menus stay 4:3, so it does too
+constexpr uint32_t kFilmLoops = 8;  // 0xDCCD0's second argument, from the stack pointer
+constexpr uint32_t kReplayFilm = 0x4E504C59;  // 0xDCCD0's "NPLY": the film playing again
 constexpr uint32_t kSprite = 0xE6790;
 constexpr float kFrameWidth = 640;
 constexpr float kFrameHeight = 480;
@@ -86,6 +90,7 @@ constexpr Panel kPanels[] = {{0x17FDE8, kLeft},   // health ring
 
 uint32_t g_view = 0;  // while its 2D layer draws
 bool g_film = false;  // the film player's frame draws
+bool g_menu_film = false;  // the film playing is a menu page's background
 float g_anchor = kCenter;
 std::mutex g_lock;
 std::unordered_map<uint32_t, float> g_anchors;  // 2D item -> its panel's anchor
@@ -148,7 +153,8 @@ void PlaceFilm(X86Context& ctx) {
     float& y = kernel::G<float>(ctx.esp + kSpriteY);
     float& w = kernel::G<float>(ctx.esp + kSpriteW);
     float& h = kernel::G<float>(ctx.esp + kSpriteH);
-    if (game::Opt().fmv_scale == kFmvFill) {
+    uint32_t scale = g_menu_film ? kFmv43 : game::Opt().fmv_scale;
+    if (scale == kFmvFill) {
         y = kFrameMiddleY + (y - kFrameMiddleY) / kNarrow;
         h /= kNarrow;
         return;
@@ -159,6 +165,13 @@ void PlaceFilm(X86Context& ctx) {
 }
 
 }  // namespace
+
+// a film starts, cdecl (film, loops, volume)
+X86_EXTERN_FUNC(__imp__sub_000DCCD0);
+X86_FUNC(sub_000DCCD0) {
+    if (kernel::R32(ctx.esp + 4) != kReplayFilm) g_menu_film = kernel::G<uint8_t>(ctx.esp + kFilmLoops) != 0;
+    __imp__sub_000DCCD0(ctx, base);
+}
 
 // the film player's frame
 X86_EXTERN_FUNC(__imp__sub_000E8CF0);
