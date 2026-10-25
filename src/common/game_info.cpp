@@ -107,6 +107,14 @@ void RawRumble(int slot, uint16_t left, uint16_t right) {
     g_raw = false;
 }
 
+// not plain negation: -32768 has no positive
+int16_t Flip(int16_t v) { return int16_t(-1 - v); }
+
+void InvertLook(input::Pad& pad) {
+    if (Opt().invert_pad_x) pad.rx = Flip(pad.rx);
+    if (Opt().invert_pad_y) pad.ry = Flip(pad.ry);
+}
+
 input::Pad SlotPad(int port, int slot, const input::Pad& own) {
     if (slot < 0) return input::Pad{};
     return slot == port ? own : RawPad(slot);
@@ -123,6 +131,7 @@ void Pad(int port, input::Pad& pad) {
     if (g_raw || port < 0 || port >= kPlayers) return;
     PlayerPort player = Opt().players[size_t(port)];
     pad = SlotPad(port, player.pad, pad);
+    InvertLook(pad);
     if (player.keyboard) input::SeenPad(pad);
     if (player.keyboard) pad.connected = true;
     if (app::MenuOpen()) pad = input::Pad{.connected = pad.connected};
@@ -179,11 +188,28 @@ void LoadPlayers(const toml::table& settings, std::array<PlayerPort, kPlayers>& 
     else std::swap(players[0], *first);
 }
 
+struct FloatOption {
+    const char* key;
+    float Options::*value;
+};
+constexpr FloatOption kFloats[] = {
+    {"mouse_sensitivity", &Options::mouse_sensitivity},
+    {"mouse_vertical_sensitivity", &Options::mouse_vertical_sensitivity},
+    {"aim_horizontal_sensitivity", &Options::aim_horizontal_sensitivity},
+    {"aim_vertical_sensitivity", &Options::aim_vertical_sensitivity},
+    {"pad_horizontal_sensitivity", &Options::pad_horizontal_sensitivity},
+    {"pad_vertical_sensitivity", &Options::pad_vertical_sensitivity},
+    {"pad_aim_horizontal_sensitivity", &Options::pad_aim_horizontal_sensitivity},
+    {"pad_aim_vertical_sensitivity", &Options::pad_aim_vertical_sensitivity},
+};
+
 // what the options list cannot hold
 void Load(const void* table) {
     const toml::table& t = *static_cast<const toml::table*>(table);
     Options& o = Opt();
-    o.mouse_sensitivity = float(t["mouse_sensitivity"].value_or(double(o.mouse_sensitivity)));
+    for (const FloatOption& f : kFloats) o.*f.value = float(t[f.key].value_or(double(o.*f.value)));
+    // files from before the split have the one sensitivity
+    if (!t["mouse_vertical_sensitivity"]) o.mouse_vertical_sensitivity = o.mouse_sensitivity;
     o.monitor = t["monitor"].value_or(o.monitor);
     if (const toml::table* keys = t["keys"].as_table())
         for (auto&& [id, value] : *keys)
@@ -193,7 +219,7 @@ void Load(const void* table) {
 
 void Save(void* table) {
     toml::table& t = *static_cast<toml::table*>(table);
-    t.insert("mouse_sensitivity", double(Opt().mouse_sensitivity));
+    for (const FloatOption& f : kFloats) t.insert(f.key, double(Opt().*f.value));
     t.insert("monitor", Opt().monitor);
     toml::table keys;
     for (const auto& [id, value] : Opt().keys) keys.insert(id, value);
@@ -232,7 +258,10 @@ const app::GameInfo app::kGame = {
     .options = {{"skip_intros", &game::Opt().skip_intros, nullptr},
                 {"fps_counter", &game::Opt().fps_counter, nullptr},
                 {"pause_on_focus_loss", &game::Opt().pause_on_focus_loss, nullptr},
-                {"invert_mouse", &game::Opt().invert_mouse, nullptr}},  // game settings kept in the settings file
+                {"invert_mouse", &game::Opt().invert_mouse, nullptr},
+                {"invert_mouse_x", &game::Opt().invert_mouse_x, nullptr},
+                {"invert_pad_x", &game::Opt().invert_pad_x, nullptr},
+                {"invert_pad_y", &game::Opt().invert_pad_y, nullptr}},  // game settings kept in the settings file
     .load = game::Load,                     // reads more from the settings file's toml::table
     .save = game::Save,                     // writes more into it
     .init = input::LoadBindings,            // after the settings load, before the window and boot

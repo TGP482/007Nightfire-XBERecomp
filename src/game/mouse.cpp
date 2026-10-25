@@ -3,6 +3,7 @@
 #include <utility>
 
 #include "common/mouse_keyboard.h"
+#include "common/options.h"
 #include "xdk/hle.h"
 
 // The mouse turns the view itself: the game's turn and look are stick rates, ramped and capped by 0xB7420.
@@ -29,22 +30,55 @@ constexpr uint32_t kPlayerSettings = 0x158;  // apart, as the players' action bl
 
 bool Looks(uint16_t state) { return state < 8 || (state > 12 && state != 16); }
 
+bool Zoomed(uint32_t controller) { return G<float>(controller + kControllerZoom) > 1.0f; }
+
+// the yaw step and pitch before the game's look, which adds the stick's turn to both
+struct Look {
+    float yaw;
+    float pitch;
+};
+
+Look ReadLook(uint32_t controller) {
+    return {G<float>(controller + kControllerYawStep), G<float>(controller + kControllerPitch)};
+}
+
+void ScalePadLook(uint32_t controller, Look before) {
+    const game::Options& o = game::Opt();
+    bool aim = Zoomed(controller);
+    float x = o.pad_horizontal_sensitivity * (aim ? o.pad_aim_horizontal_sensitivity : 1.0f);
+    float y = o.pad_vertical_sensitivity * (aim ? o.pad_aim_vertical_sensitivity : 1.0f);
+    float& yaw = G<float>(controller + kControllerYawStep);
+    float& pitch = G<float>(controller + kControllerPitch);
+    yaw = before.yaw + (yaw - before.yaw) * x;
+    pitch = before.pitch + (pitch - before.pitch) * y;
+}
+
+void MouseLook(uint32_t player, uint32_t controller) {
+    float dx;
+    float dy;
+    if (!input::TakeMouse(dx, dy) || !Looks(G<uint16_t>(player + kPlayerState))) return;
+    if (Zoomed(controller)) {
+        dx *= game::Opt().aim_horizontal_sensitivity;
+        dy *= game::Opt().aim_vertical_sensitivity;
+    }
+    float per_count = kRadiansPerCount / std::max(G<float>(controller + kControllerZoom), 1.0f);
+    G<float>(controller + kControllerYawStep) -= dx * per_count;
+    G<float>(controller + kControllerPitch) -= dy * per_count * kQuarterTurnsPerRadian;
+    if (dy != 0.0f) G<uint8_t>(controller + kControllerLooking) = 1;
+}
+
 }  // namespace
 
 // the player's look each frame, from 0xAD520 (player)
 X86_EXTERN_FUNC(__imp__sub_000B7610);
 X86_FUNC(sub_000B7610) {
     uint32_t player = kernel::R32(ctx.esp + 4);
-    __imp__sub_000B7610(ctx, base);
     uint32_t controller = kernel::R32(player + kPlayerController);
-    float dx;
-    float dy;
-    if (G<int8_t>(controller + kControllerPlayer) != input::KeyboardPlayer() || !input::TakeMouse(dx, dy)) return;
-    if (!Looks(G<uint16_t>(player + kPlayerState))) return;
-    float per_count = kRadiansPerCount / std::max(G<float>(controller + kControllerZoom), 1.0f);
-    G<float>(controller + kControllerYawStep) -= dx * per_count;
-    G<float>(controller + kControllerPitch) -= dy * per_count * kQuarterTurnsPerRadian;
-    if (dy != 0.0f) G<uint8_t>(controller + kControllerLooking) = 1;
+    Look before = ReadLook(controller);
+    __imp__sub_000B7610(ctx, base);
+    bool keyboard = G<int8_t>(controller + kControllerPlayer) == input::KeyboardPlayer();
+    if (!keyboard || !input::KeyboardActive()) ScalePadLook(controller, before);
+    if (keyboard) MouseLook(player, controller);
 }
 
 // the sight's pull onto targets each frame (player): the mouse aims for itself, so on the keyboard and mouse it runs

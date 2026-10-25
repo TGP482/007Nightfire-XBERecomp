@@ -38,9 +38,10 @@ bool g_display_held = false;
 Settings g_display;
 std::string g_display_monitor;  // the held monitor, beside g_display
 
-const char* const kPages[] = {"RECOMP SETTINGS", "MOUSE AND KEYBOARD"};
+const char* const kPages[] = {"RECOMP SETTINGS", "MOUSE AND KEYBOARD", "CONTROLLER"};
 constexpr int kPageCount = int(std::size(kPages));
 constexpr int kInputPage = 1;
+constexpr int kPadPage = 2;
 int g_page = 0;
 
 // the key binding in progress: its keys must be let go before the next press binds
@@ -313,8 +314,9 @@ std::string SensitivityText(int tenths) {
     return text;
 }
 
+template <float game::Options::*Value>
 std::string StepSensitivity(Settings&, int step) {
-    float& sensitivity = game::Opt().mouse_sensitivity;
+    float& sensitivity = game::Opt().*Value;
     int tenths = int(std::lround(sensitivity * kTenthsPerUnit));
     if (step) {
         int slot = std::clamp(tenths, 1, kSensitivitySlots) - 1;
@@ -324,8 +326,9 @@ std::string StepSensitivity(Settings&, int step) {
     return SensitivityText(tenths);
 }
 
-std::string StepInvertLook(Settings&, int step) {
-    bool& on = game::Opt().invert_mouse;
+template <bool game::Options::*Value>
+std::string StepToggle(Settings&, int step) {
+    bool& on = game::Opt().*Value;
     if (step) on = !on;
     return OnOff(on);
 }
@@ -396,8 +399,8 @@ enum RowId {
     kMaxFpsRow,
     kAnisoRow,
     kSkipIntrosRow,
-    kSensitivityRow,
-    kInvertLookRow,
+    kMouseHorizontalRow,
+    kInvertYRow,
     kMonitorRow,
     kPlayer1Row,
     kPlayer2Row,
@@ -405,6 +408,16 @@ enum RowId {
     kPlayer4Row,
     kFpsCounterRow,
     kPauseOnFocusLossRow,
+    kMouseVerticalRow,
+    kAimHorizontalRow,
+    kAimVerticalRow,
+    kInvertXRow,
+    kPadHorizontalRow,
+    kPadVerticalRow,
+    kPadAimHorizontalRow,
+    kPadAimVerticalRow,
+    kPadInvertXRow,
+    kPadInvertYRow,
 };
 
 // in RowId order
@@ -416,8 +429,8 @@ constexpr StepFn kSteps[] = {
     StepMaxFps,
     StepAniso,
     StepSkipIntros,
-    StepSensitivity,
-    StepInvertLook,
+    StepSensitivity<&game::Options::mouse_sensitivity>,
+    StepToggle<&game::Options::invert_mouse>,
     StepMonitor,
     StepPlayerPort<0>,
     StepPlayerPort<1>,
@@ -425,6 +438,16 @@ constexpr StepFn kSteps[] = {
     StepPlayerPort<3>,
     StepFpsCounter,
     StepPauseOnFocusLoss,
+    StepSensitivity<&game::Options::mouse_vertical_sensitivity>,
+    StepSensitivity<&game::Options::aim_horizontal_sensitivity>,
+    StepSensitivity<&game::Options::aim_vertical_sensitivity>,
+    StepToggle<&game::Options::invert_mouse_x>,
+    StepSensitivity<&game::Options::pad_horizontal_sensitivity>,
+    StepSensitivity<&game::Options::pad_vertical_sensitivity>,
+    StepSensitivity<&game::Options::pad_aim_horizontal_sensitivity>,
+    StepSensitivity<&game::Options::pad_aim_vertical_sensitivity>,
+    StepToggle<&game::Options::invert_pad_x>,
+    StepToggle<&game::Options::invert_pad_y>,
 };
 
 bool Held(int id) { return id == kMonitorRow || id == kDisplayModeRow || id == kResolutionRow; }
@@ -458,8 +481,12 @@ const std::vector<Row>& InputRows() {
     static const std::vector<Row> list = [] {
         std::vector<Row> out = {
             {Kind::Heading, -1, "MOUSE"},
-            {Kind::Value, kSensitivityRow, "MOUSE SENSITIVITY"},
-            {Kind::Value, kInvertLookRow, "INVERT LOOK"},
+            {Kind::Value, kMouseHorizontalRow, "MOUSE HORIZONTAL SENSITIVITY"},
+            {Kind::Value, kMouseVerticalRow, "MOUSE VERTICAL SENSITIVITY"},
+            {Kind::Value, kAimHorizontalRow, "AIM HORIZONTAL SENSITIVITY"},
+            {Kind::Value, kAimVerticalRow, "AIM VERTICAL SENSITIVITY"},
+            {Kind::Value, kInvertXRow, "INVERT X AXIS"},
+            {Kind::Value, kInvertYRow, "INVERT Y AXIS"},
             {Kind::Heading, -1, "KEYBOARD"},
         };
         size_t count = 0;
@@ -476,6 +503,16 @@ const std::vector<Row>& InputRows() {
     }();
     return list;
 }
+
+constexpr Row kPadRows[] = {
+    {Kind::Heading, -1, "GENERAL"},
+    {Kind::Value, kPadHorizontalRow, "CONTROLLER HORIZONTAL SENSITIVITY"},
+    {Kind::Value, kPadVerticalRow, "CONTROLLER VERTICAL SENSITIVITY"},
+    {Kind::Value, kPadAimHorizontalRow, "AIM HORIZONTAL SENSITIVITY"},
+    {Kind::Value, kPadAimVerticalRow, "AIM VERTICAL SENSITIVITY"},
+    {Kind::Value, kPadInvertXRow, "INVERT X AXIS"},
+    {Kind::Value, kPadInvertYRow, "INVERT Y AXIS"},
+};
 
 bool SameDisplay(const Settings& a, const Settings& b) {
     bool same_monitor = MonitorSetting(a) == MonitorSetting(b);
@@ -510,13 +547,38 @@ void Apply() {
 
 void CancelCapture() { g_capture.action = -1; }
 
+void RestoreMouseDefaults() {
+    const game::Options defaults;
+    game::Options& o = game::Opt();
+    o.mouse_sensitivity = defaults.mouse_sensitivity;
+    o.mouse_vertical_sensitivity = defaults.mouse_vertical_sensitivity;
+    o.aim_horizontal_sensitivity = defaults.aim_horizontal_sensitivity;
+    o.aim_vertical_sensitivity = defaults.aim_vertical_sensitivity;
+    o.invert_mouse = defaults.invert_mouse;
+    o.invert_mouse_x = defaults.invert_mouse_x;
+    input::ResetBindings();
+}
+
+void RestorePadDefaults() {
+    const game::Options defaults;
+    game::Options& o = game::Opt();
+    o.pad_horizontal_sensitivity = defaults.pad_horizontal_sensitivity;
+    o.pad_vertical_sensitivity = defaults.pad_vertical_sensitivity;
+    o.pad_aim_horizontal_sensitivity = defaults.pad_aim_horizontal_sensitivity;
+    o.pad_aim_vertical_sensitivity = defaults.pad_aim_vertical_sensitivity;
+    o.invert_pad_x = defaults.invert_pad_x;
+    o.invert_pad_y = defaults.invert_pad_y;
+    Save();
+}
+
 void RestoreDefaults(int page) {
     CancelCapture();
     if (page == kInputPage) {
-        const game::Options defaults;
-        game::Opt().mouse_sensitivity = defaults.mouse_sensitivity;
-        game::Opt().invert_mouse = defaults.invert_mouse;
-        input::ResetBindings();
+        RestoreMouseDefaults();
+        return;
+    }
+    if (page == kPadPage) {
+        RestorePadDefaults();
         return;
     }
     Settings& s = Get();
@@ -879,11 +941,9 @@ void DrawPanel() {
         float footer = ImGui::GetTextLineHeightWithSpacing() + ImGui::GetFrameHeightWithSpacing() + em;
         ImGui::BeginChild("##rows", ImVec2(0, -footer), ImGuiChildFlags_NavFlattened);
         g_hovered_box = -1;
-        if (g_page == kInputPage) {
-            for (const Row& row : InputRows()) DrawRow(row);
-        } else {
-            for (const Row& row : kSettingsRows) DrawRow(row);
-        }
+        size_t count = 0;
+        const Row* list = rows::Page(g_page, &count);
+        for (size_t i = 0; i < count; i++) DrawRow(list[i]);
         ImGui::EndChild();
         ImGui::Separator();
         DrawHint();
@@ -899,6 +959,10 @@ const rows::Row* rows::Page(int page, size_t* count) {
     if (page == 0) {
         *count = std::size(kSettingsRows);
         return kSettingsRows;
+    }
+    if (page == kPadPage) {
+        *count = std::size(kPadRows);
+        return kPadRows;
     }
     if (page != kInputPage) return nullptr;
     *count = InputRows().size();
