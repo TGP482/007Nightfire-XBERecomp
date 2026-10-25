@@ -22,6 +22,10 @@ constexpr uint32_t kRateAcross = 0x700;
 constexpr uint32_t kRateUpDown = 0x704;
 constexpr uint32_t kTurnAcross = 0x6F8;
 constexpr uint32_t kTurnUpDown = 0x6FC;
+// the target a zoom locks (0x5F680 from 0xB7AE0): the update turns towards it and slows the turn near it, until
+// it marks the camera free (+0x708)
+constexpr uint32_t kTarget = 0x6C;
+constexpr uint32_t kTargetFree = 0x708;
 // character: its look angles in turns, which 0x857D0 turns by the stick's rates and then clamps (0x83190); the
 // stick's right turns the yaw up, its up turns the pitch down
 constexpr uint32_t kCharacterPitch = 0x1E8;
@@ -30,6 +34,8 @@ constexpr uint32_t kCharacterInput = 0x354;  // its controller input, which only
 // its view angle in degrees, 33 unzoomed; 0x857D0 scales the stick's turn by it over 33, so zoomed in turns slower
 constexpr uint32_t kCharacterFov = 0xB4;
 constexpr float kUnzoomedFov = 33.0f;
+constexpr uint32_t kCharacterAim = 0x354;  // its input: +0xB set while 0x82E00 keeps the sight on a target
+constexpr uint32_t kAimLocked = 0xB;
 
 // the angles are whole turns: the rotations (0x116C70, 0x7A1E0) take the sine of 2 pi times them
 constexpr float kTurnsPerDegree = 1.0f / 360.0f;
@@ -106,7 +112,22 @@ X86_FUNC(sub_00060110) {
     float up_down_sensitivity = pad ? o.pad_vertical_sensitivity : 1.0f;
     Axis across = ApplyAxis(camera, kRateAcross, kTurnAcross, across_sensitivity, mouse.across + gyro.across);
     Axis up_down = ApplyAxis(camera, kRateUpDown, kTurnUpDown, up_down_sensitivity, mouse.up_down + gyro.up_down);
+    // the mouse aims for itself: no pull onto the locked target
+    uint32_t target = R32(camera + kTarget);
+    uint8_t was_free = G<uint8_t>(camera + kTargetFree);
+    if (!pad) kernel::W32(camera + kTarget, 0);
     __imp__sub_00060110(ctx, base);
+    kernel::W32(camera + kTarget, target);
+    G<uint8_t>(camera + kTargetFree) = was_free;
     RestoreAxis(across);
     RestoreAxis(up_down);
+}
+
+// the sight's pull onto a target (character, angle across out, angle up and down out), thiscall: true when it pulls.
+// The mouse aims for itself, so on the keyboard and mouse it never does.
+X86_EXTERN_FUNC(__imp__sub_00082E00);
+X86_FUNC(sub_00082E00) {
+    if (!input::KeyboardActive()) return __imp__sub_00082E00(ctx, base);
+    G<uint8_t>(R32(ctx.ecx + kCharacterAim) + kAimLocked) = 0;
+    kernel::Return(ctx, 0, 2);
 }
