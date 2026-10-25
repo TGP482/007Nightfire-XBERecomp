@@ -279,6 +279,10 @@ DSound_StreamVtable2        = 0
 XPP_GamepadType             = 0x183AEC
 XPP_MemoryUnitType          = 0
 
+[[hook]]
+at = 0xDECFA
+call = "DrivingLegendKeys"
+
 # argument locations in API order for functions a link time code generated library compiled with another
 # convention: a register (eax ebx ecx edx esi edi ebp) or "stack" for the next stack slot, which the callee pops
 [abi]
