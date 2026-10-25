@@ -7,7 +7,8 @@
 
 // The menus count frames, not time: 0x94370 runs them once a frame (their input, pages and focus pulse). It runs 30
 // times a second instead, as on the console, at any frame rate; the widgets' 2D items stay drawn between runs. A press
-// is a state bit for one frame, so the presses of the frames between runs are kept for the next run.
+// is a state bit for one frame, so the presses of the frames between runs are kept for the next run. A held action
+// repeats after a count of its frames, which also goes up 30 times a second while a menu is up.
 namespace {
 
 using kernel::G;
@@ -21,12 +22,17 @@ constexpr uint32_t kStates = 0x1FE7D4;
 constexpr uint32_t kPlayerBlock = 0x158;
 constexpr uint32_t kPlayers = 4;
 constexpr uint8_t kEdges = 4 | 8;  // pressed, repeating
+constexpr uint8_t kRepeating = 8;
+// u16 frames each action value has been held, beside the states; it repeats from 46 on, every 8th
+constexpr uint32_t kHeldFrames = 0x1FE784;
 constexpr double kConsoleRate = 30.0;
 
 using Clock = std::chrono::steady_clock;
 
 std::array<uint8_t, kPlayers * input::kActionValues> g_edges{};
+std::array<uint16_t, kPlayers * input::kActionValues> g_held{};
 Clock::time_point g_next;
+Clock::time_point g_next_held;
 
 bool MenuUp() {
     for (uint32_t k = 0; k < kRecordCount; k++)
@@ -34,10 +40,27 @@ bool MenuUp() {
     return false;
 }
 
+uint32_t PlayerOffset(size_t index) { return uint32_t(index / input::kActionValues) * kPlayerBlock; }
+
 uint8_t& State(size_t index) {
-    uint32_t player = uint32_t(index / input::kActionValues);
-    uint32_t value = uint32_t(index % input::kActionValues);
-    return G<uint8_t>(kStates + player * kPlayerBlock + value);
+    return G<uint8_t>(kStates + PlayerOffset(index) + uint32_t(index % input::kActionValues));
+}
+
+uint16_t& Held(size_t index) {
+    return G<uint16_t>(kHeldFrames + PlayerOffset(index) + uint32_t(index % input::kActionValues) * 2);
+}
+
+void LatchHeld() {
+    for (size_t i = 0; i < g_held.size(); i++) g_held[i] = Held(i);
+}
+
+// a value still held keeps its count from before this frame, and so does not repeat on it
+void RestoreHeld() {
+    for (size_t i = 0; i < g_held.size(); i++) {
+        if (!g_held[i] || !Held(i)) continue;
+        Held(i) = g_held[i];
+        State(i) &= ~kRepeating;
+    }
 }
 
 void KeepEdges() {
@@ -49,14 +72,14 @@ void ApplyEdges() {
     g_edges.fill(0);
 }
 
-// true when a run is due, the next then due a period later
-bool UpdateRunDue() {
+// true when a 30 Hz step is due, the next then due a period later
+bool UpdateDue(Clock::time_point& next) {
     constexpr std::chrono::duration<double> kSeconds{1.0 / kConsoleRate};
     constexpr auto kPeriod = std::chrono::duration_cast<Clock::duration>(kSeconds);
     Clock::time_point now = Clock::now();
-    if (now < g_next) return false;
-    g_next += kPeriod;
-    if (g_next <= now) g_next = now + kPeriod;
+    if (now < next) return false;
+    next += kPeriod;
+    if (next <= now) next = now + kPeriod;
     return true;
 }
 
@@ -71,11 +94,20 @@ X86_FUNC(sub_00094370) {
         return __imp__sub_00094370(ctx, base);
     }
     KeepEdges();
-    if (!UpdateRunDue()) {
+    if (!UpdateDue(g_next)) {
         kernel::Return(ctx, 0, 0);
         return;
     }
     ApplyEdges();
     game::ClearMainMenuLegend();
     __imp__sub_00094370(ctx, base);
+}
+
+// the input's frame
+X86_EXTERN_FUNC(__imp__sub_0006CF50);
+X86_FUNC(sub_0006CF50) {
+    bool between = MenuUp() && !UpdateDue(g_next_held);
+    if (between) LatchHeld();
+    __imp__sub_0006CF50(ctx, base);
+    if (between) RestoreHeld();
 }
