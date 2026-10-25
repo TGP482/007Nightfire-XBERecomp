@@ -357,9 +357,8 @@ std::string SensitivityText(int tenths) {
     return text;
 }
 
-template <float game::Options::*Value>
-std::string StepSensitivity(Settings&, int step) {
-    float& sensitivity = game::Opt().*Value;
+// 0.1 to 5.0 in tenths
+std::string StepTenths(float& sensitivity, int step) {
     int tenths = int(std::lround(sensitivity * kTenthsPerUnit));
     if (step) {
         int slot = std::clamp(tenths, 1, kSensitivitySlots) - 1;
@@ -367,6 +366,39 @@ std::string StepSensitivity(Settings&, int step) {
         sensitivity = float(tenths) / kTenthsPerUnit;
     }
     return SensitivityText(tenths);
+}
+
+template <float game::Options::*Value>
+std::string StepSensitivity(Settings&, int step) {
+    return StepTenths(game::Opt().*Value, step);
+}
+
+std::string StepGyroSensitivity(Settings&, int step) { return StepTenths(game::Opt().gyro.sensitivity, step); }
+
+// one of names, stepped first
+template <size_t N>
+std::string StepName(uint32_t& value, const char* const (&names)[N], int step) {
+    value = uint32_t(StepIndex(int(std::min<size_t>(value, N - 1)), step, int(N)));
+    return names[value];
+}
+
+std::string StepGyroAxis(Settings&, int step) { return StepName(game::Opt().gyro.axis, gyro::kAxisNames, step); }
+
+std::string StepGyroButton(Settings&, int step) {
+    return StepName(game::Opt().gyro.button, gyro::kButtonNames, step);
+}
+
+std::string StepGyroButtonMode(Settings&, int step) {
+    return StepName(game::Opt().gyro.button_mode, gyro::kButtonModeNames, step);
+}
+
+std::string StepGyroRecenter(Settings&, int step) {
+    return StepName(game::Opt().gyro.recenter_button, gyro::kButtonNames, step);
+}
+
+std::string StepGyroCalibrate(Settings&, int step) {
+    if (step) gyro::StartCalibration();
+    return gyro::Calibrating() ? "KEEP STILL" : "START";
 }
 
 constexpr int kFovMin = 45;
@@ -387,6 +419,12 @@ std::string StepFov(Settings&, int step) {
 template <bool game::Options::*Value>
 std::string StepToggle(Settings&, int step) {
     bool& on = game::Opt().*Value;
+    if (step) on = !on;
+    return OnOff(on);
+}
+
+std::string StepGyroAiming(Settings&, int step) {
+    bool& on = game::Opt().gyro.enabled;
     if (step) on = !on;
     return OnOff(on);
 }
@@ -484,6 +522,13 @@ enum RowId {
     kHdrOutputRow,
     kColourBlindRow,
     kAudioOutputRow,
+    kGyroAimingRow,
+    kGyroSensitivityRow,
+    kGyroAxisRow,
+    kGyroButtonRow,
+    kGyroButtonModeRow,
+    kGyroRecenterRow,
+    kGyroCalibrateRow,
 };
 
 // in RowId order
@@ -522,6 +567,13 @@ constexpr StepFn kSteps[] = {
     StepHdrOutput,
     StepColourBlind,
     StepAudioOutput,
+    StepGyroAiming,
+    StepGyroSensitivity,
+    StepGyroAxis,
+    StepGyroButton,
+    StepGyroButtonMode,
+    StepGyroRecenter,
+    StepGyroCalibrate,
 };
 
 bool Held(int id) { return id == kMonitorRow || id == kDisplayModeRow || id == kResolutionRow; }
@@ -594,6 +646,14 @@ constexpr Row kPadRows[] = {
     {Kind::Value, kPadAimHorizontalRow, "AIM HORIZONTAL SENSITIVITY"},
     {Kind::Value, kPadAimVerticalRow, "AIM VERTICAL SENSITIVITY"},
     {Kind::Value, kPadInvertXRow, "INVERT X AXIS"},
+    {Kind::Heading, -1, "GYRO"},
+    {Kind::Value, kGyroAimingRow, "GYRO AIMING"},
+    {Kind::Value, kGyroSensitivityRow, "GYRO SENSITIVITY"},
+    {Kind::Value, kGyroAxisRow, "GYRO AXIS"},
+    {Kind::Value, kGyroButtonRow, "GYRO BUTTON"},
+    {Kind::Value, kGyroButtonModeRow, "GYRO BUTTON MODE"},
+    {Kind::Value, kGyroRecenterRow, "RECENTER BUTTON"},
+    {Kind::Value, kGyroCalibrateRow, "CALIBRATE GYRO"},
 };
 
 bool SameDisplay(const Settings& a, const Settings& b) {
@@ -649,6 +709,7 @@ void RestorePadDefaults() {
     o.pad_aim_horizontal_sensitivity = defaults.pad_aim_horizontal_sensitivity;
     o.pad_aim_vertical_sensitivity = defaults.pad_aim_vertical_sensitivity;
     o.invert_pad_x = defaults.invert_pad_x;
+    o.gyro = defaults.gyro;
     Save();
 }
 

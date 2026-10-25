@@ -214,6 +214,7 @@ void Load(const void* table) {
     for (const FloatOption& f : kFloats) o.*f.value = float(t[f.key].value_or(double(o.*f.value)));
     // files from before the split have the one sensitivity
     if (!t["mouse_vertical_sensitivity"]) o.mouse_vertical_sensitivity = o.mouse_sensitivity;
+    o.gyro.sensitivity = float(t["gyro_sensitivity"].value_or(double(o.gyro.sensitivity)));
     o.monitor = t["monitor"].value_or(o.monitor);
     if (const toml::table* keys = t["keys"].as_table())
         for (auto&& [id, value] : *keys)
@@ -225,6 +226,7 @@ void Load(const void* table) {
 void Save(void* table) {
     toml::table& t = *static_cast<toml::table*>(table);
     for (const FloatOption& f : kFloats) t.insert(f.key, double(Opt().*f.value));
+    t.insert("gyro_sensitivity", double(Opt().gyro.sensitivity));
     t.insert("monitor", Opt().monitor);
     toml::table keys;
     for (const auto& [id, value] : Opt().keys) keys.insert(id, value);
@@ -272,6 +274,11 @@ const app::GameInfo app::kGame = {
                 {"hdr_output", &game::Opt().hdr_output, nullptr},
                 {"colour_blind", nullptr, &game::Opt().colour_blind},
                 {"audio_output", nullptr, &game::Opt().audio_output},
+                {"gyro_aiming", &game::Opt().gyro.enabled, nullptr},
+                {"gyro_axis", nullptr, &game::Opt().gyro.axis},
+                {"gyro_button", nullptr, &game::Opt().gyro.button},
+                {"gyro_button_mode", nullptr, &game::Opt().gyro.button_mode},
+                {"gyro_recenter_button", nullptr, &game::Opt().gyro.recenter_button},
                 {"msaa", nullptr, &game::Opt().msaa},
                 {"smaa", &game::Opt().smaa, nullptr},
                 {"ambient_occlusion", nullptr, &game::Opt().ambient_occlusion}},  // game settings kept in the settings file

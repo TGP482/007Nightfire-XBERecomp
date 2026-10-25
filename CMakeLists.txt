@@ -23,6 +23,8 @@ include(${SDK}/cmake/XbeRecomp.cmake)
 
 file(GLOB XBE_HOST_SOURCES CONFIGURE_DEPENDS src/*/*.cpp)
 list(FILTER XBE_HOST_SOURCES EXCLUDE REGEX "/src/(game|driving)/")
+# SDL's headers go to the gyro code too (SDL is linked LINK_ONLY)
+set_source_files_properties(src/common/gyro.cpp PROPERTIES INCLUDE_DIRECTORIES "${sdl3_SOURCE_DIR}/include")
 # src/d3d, src/dsound and src/audio replace the SDK's Direct3D, renderer, DirectSound and audio output
 list(FILTER XBE_RUNTIME_SOURCES EXCLUDE REGEX "/(xdk/dsound|xdk/d3d8|gpu/d3d12|audio/xaudio2)\\.cpp$")
 

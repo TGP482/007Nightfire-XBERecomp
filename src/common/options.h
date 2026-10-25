@@ -5,6 +5,8 @@
 #include <map>
 #include <string>
 
+#include "common/gyro.h"
+
 // the game's own settings, in the settings file through app::kGame.load and save
 namespace game {
 
@@ -42,6 +44,7 @@ struct Options {
     float pad_aim_horizontal_sensitivity = 1.0f;
     float pad_aim_vertical_sensitivity = 1.0f;
     bool invert_pad_x = false;  // the game's own controls have the Y axis
+    gyro::Settings gyro;  // the controller's gyro turns player 1's view, beside the right stick
     std::string monitor;  // its device name, \\.\DISPLAY2; empty the primary
     std::map<std::string, std::string> keys;  // action id to key names, absent is the default
     std::array<PlayerPort, kPlayers> players = {{{true, 0}, {false, 1}, {false, 2}, {false, 3}}};  // by port

@@ -2,6 +2,7 @@
 #include <iterator>
 #include <utility>
 
+#include "common/menu.h"
 #include "common/mouse_keyboard.h"
 #include "common/options.h"
 #include "xdk/hle.h"
@@ -17,6 +18,7 @@ constexpr uint32_t kWeaponFlags = 0x50;  // bit 0 set by the manual aim button, 
 constexpr uint8_t kManualAim = 1;
 constexpr uint32_t kPlayerController = 0xBC;
 constexpr uint32_t kControllerPlayer = 0x8DE;
+constexpr int8_t kPlayer1 = 0;  // the gyro turns this player alone
 // radians this frame, right negative, zeroed at its start; the stick's turn is in it once the look has run, then
 // 0xAD520 turns the player by it
 constexpr uint32_t kControllerYawStep = 0x28;
@@ -25,7 +27,8 @@ constexpr uint32_t kControllerPitch = 0x838;
 constexpr uint32_t kControllerZoom = 0x860;  // the view's magnification, 1 unzoomed; the stick's look divides by it
 constexpr uint32_t kControllerLooking = 0xF0;  // set while the stick moves the view up or down
 
-constexpr float kRadiansPerCount = 0.04f * 0.017453292f;  // at sensitivity 1, as the other recomps
+constexpr float kRadiansPerDegree = 0.017453292f;
+constexpr float kRadiansPerCount = 0.04f * kRadiansPerDegree;  // at sensitivity 1, as the other recomps
 constexpr float kQuarterTurnsPerRadian = 0.63661975f;
 
 // the game's Auto Aim setting, player 1's; the second while 0x260018 is set
@@ -64,6 +67,22 @@ void MouseLook(uint32_t player, uint32_t controller, bool aim) {
     if (dy != 0.0f) G<uint8_t>(controller + kControllerLooking) = 1;
 }
 
+// The gyro turns player 1's view beside the stick, as the mouse does: degrees for degrees times its sensitivity,
+// narrowed by the zoom. The game clamps the pitch after the look.
+void GyroLook(uint32_t player, uint32_t controller) {
+    const game::Options& o = game::Opt();
+    gyro::Turn turn = gyro::Take(o.gyro);
+    if (app::MenuOpen() || !Looks(G<uint16_t>(player + kPlayerState))) return;
+    float& pitch = G<float>(controller + kControllerPitch);
+    if (turn.recenter) pitch = 0;
+    // the gyro's yaw is left positive, as the yaw step, and its pitch down positive
+    float yaw = o.invert_pad_x ? -turn.yaw : turn.yaw;
+    float per_degree = kRadiansPerDegree / std::max(G<float>(controller + kControllerZoom), 1.0f);
+    G<float>(controller + kControllerYawStep) += yaw * per_degree;
+    pitch -= turn.pitch * per_degree * kQuarterTurnsPerRadian;
+    if (turn.pitch != 0.0f) G<uint8_t>(controller + kControllerLooking) = 1;
+}
+
 }  // namespace
 
 // the player's look each frame, from 0xAD520 (player)
@@ -77,6 +96,7 @@ X86_FUNC(sub_000B7610) {
     bool keyboard = G<int8_t>(controller + kControllerPlayer) == input::KeyboardPlayer();
     if (!keyboard || !input::KeyboardActive()) ScalePadLook(controller, aim, pitch);
     if (keyboard) MouseLook(player, controller, aim);
+    if (G<int8_t>(controller + kControllerPlayer) == kPlayer1) GyroLook(player, controller);
 }
 
 // the sight's pull onto targets each frame (player): the mouse aims for itself, so on the keyboard and mouse it runs
