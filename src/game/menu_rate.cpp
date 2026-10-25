@@ -2,6 +2,7 @@
 #include <chrono>
 
 #include "common/mouse_keyboard.h"
+#include "game/main_menu.h"
 #include "xdk/hle.h"
 
 // The menus count frames, not time: 0x94370 runs them once a frame (their input, pages and focus pulse). It runs 30
@@ -66,6 +67,7 @@ X86_EXTERN_FUNC(__imp__sub_00094370);
 X86_FUNC(sub_00094370) {
     if (!MenuUp()) {
         g_edges.fill(0);
+        game::ClearMainMenuLegend();
         return __imp__sub_00094370(ctx, base);
     }
     KeepEdges();
@@ -74,5 +76,6 @@ X86_FUNC(sub_00094370) {
         return;
     }
     ApplyEdges();
+    game::ClearMainMenuLegend();
     __imp__sub_00094370(ctx, base);
 }

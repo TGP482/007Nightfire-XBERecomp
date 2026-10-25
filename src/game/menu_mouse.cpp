@@ -90,7 +90,7 @@ constexpr int kMaxWidgets = 256;
 constexpr uint32_t kMainMenuId = 0x40000002;
 constexpr uint32_t kLegendId = 0x10000001;
 
-uint32_t g_main_menu = 0;  // the main menu page while it takes input, until the frame's end takes it
+uint32_t g_main_menu = 0;  // the main menu page while it takes input, until the menus' next run
 
 struct Rect {
     int x;
@@ -334,9 +334,10 @@ X86_FUNC(sub_00095A80) {
     __imp__sub_00095A80(ctx, base);
 }
 
+void game::ClearMainMenuLegend() { g_main_menu = 0; }
+
 game::LegendRow game::TakeMainMenuLegend() {
     uint32_t page = g_main_menu;
-    g_main_menu = 0;
     if (!page) return {};
     int n = 0;
     for (uint32_t w = FirstWidget(page); w && n < kMaxWidgets; w = R32(w), n++) {
