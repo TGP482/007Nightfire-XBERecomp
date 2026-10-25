@@ -4,10 +4,13 @@
 
 #include "common/options.h"
 #include "core/log.h"
+#include "kernel/memory.h"
 #include "xdk/hle.h"
 
 // The game's own heap (0x70AE0 allocates, 0x705F0 frees): a summary every half minute, and what filled it when it
 // runs out. Out of memory zeroes its search start and the next allocation reads address 0.
+// Sprite batches (0xDCAC0) take a heap list every frame, which splits the heap at high fps; each slot keeps its own
+// list outside the heap instead (the heap's free skips those).
 
 namespace {
 
@@ -28,6 +31,10 @@ constexpr uint32_t kArgFlags = 8;
 // 0x709C0's stack at entry: return, the allocator's four saved registers, its return, then its arguments
 constexpr uint32_t kOutOfMemoryArgs = 0x14;
 constexpr std::chrono::seconds kSummaryPeriod{30};
+// sprite batch ring
+constexpr uint32_t kBatchAllocReturn = 0xDCAF6;
+constexpr uint32_t kBatchSlot = 0x2ADF80;
+constexpr uint32_t kBatchSlots = 64;
 
 struct HeapUse {
     std::array<uint32_t, kTags> tag_bytes{};
@@ -55,6 +62,23 @@ HeapUse ReadHeapUse() {
     return use;
 }
 
+struct BatchList {
+    uint32_t va = 0;
+    uint32_t size = 0;
+};
+std::array<BatchList, kBatchSlots> g_batch_lists;
+
+// the slot is idle here, so its old list is no longer drawn
+uint32_t EnsureBatchList(uint32_t size) {
+    BatchList& list = g_batch_lists[kernel::R32(kBatchSlot) % kBatchSlots];
+    if (list.size < size) {
+        if (list.va) mem::FreeSystem(list.va);
+        list.va = mem::AllocSystem(size);
+        list.size = size;
+    }
+    return list.va;
+}
+
 void LogSummary(uint32_t allocations, double seconds) {
     HeapUse use = ReadHeapUse();
     LOGR("heap: %.0f allocations/s at %.0f fps, %u used blocks, xbox %u, free %u in %u blocks, largest %u",
@@ -75,6 +99,10 @@ X86_FUNC(sub_00070AE0) {
         LogSummary(allocations, std::chrono::duration<double>(now - last).count());
         allocations = 0;
         last = now;
+    }
+    if (kernel::R32(ctx.esp) == kBatchAllocReturn) {
+        kernel::Return(ctx, EnsureBatchList(kernel::R32(ctx.esp + kArgSize)), 0);
+        return;
     }
     __imp__sub_00070AE0(ctx, base);
 }
