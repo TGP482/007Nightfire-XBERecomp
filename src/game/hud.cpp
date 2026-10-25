@@ -90,6 +90,7 @@ constexpr Panel kPanels[] = {{0x17FDE8, kLeft},   // health ring
 
 uint32_t g_view = 0;  // while its 2D layer draws
 bool g_film = false;  // the film player's frame draws
+bool g_side_bars = false;  // DrawSideBars draws
 bool g_menu_film = false;  // the film playing is a menu page's background
 float g_anchor = kCenter;
 std::mutex g_lock;
@@ -133,25 +134,31 @@ void Place(float& x, float& w, float anchor, float left, float right) {
     w = x2 - x1;
 }
 
-// the sides beside a 4:3 film, where older frames would show: the film's texture times black, as sprites so they
-// keep their place among its draws
-void DrawFilmBars(X86Context& ctx, float width) {
-    g_film = false;
+// the sides beside a picture narrowed to 4:3, where older frames would show: its texture times black, as sprites so
+// they keep their place among its draws
+void DrawSideBars(X86Context& ctx, float width) {
+    g_side_bars = true;
     for (float left : {0.0f, kFrameWidth - width}) {
         std::array<uint32_t, 9> args = {std::bit_cast<uint32_t>(left), 0, std::bit_cast<uint32_t>(width),
                                         std::bit_cast<uint32_t>(kFrameHeight), 0, 0, 0, 0, kBlack};
         kernel::CallGuest(ctx, kSprite, args.data(), args.size());
     }
-    g_film = true;
+    g_side_bars = false;
+}
+
+void NarrowToMiddle(X86Context& ctx) {
+    float& x = kernel::G<float>(ctx.esp + kSpriteX);
+    float& w = kernel::G<float>(ctx.esp + kSpriteW);
+    x = kFrameMiddleX + (x - kFrameMiddleX) * kNarrow;
+    w *= kNarrow;
+    DrawSideBars(ctx, (kFrameWidth - w) / 2);
 }
 
 // The film is one 640x480 sprite, which the 16:9 frame would stretch: FILL widens its height with it, so the film
 // keeps its shape and fills the screen (the letterbox bars go past the edges); 4:3 narrows it into the middle.
 void PlaceFilm(X86Context& ctx) {
     if (!app::Widescreen()) return;
-    float& x = kernel::G<float>(ctx.esp + kSpriteX);
     float& y = kernel::G<float>(ctx.esp + kSpriteY);
-    float& w = kernel::G<float>(ctx.esp + kSpriteW);
     float& h = kernel::G<float>(ctx.esp + kSpriteH);
     uint32_t scale = g_menu_film ? kFmv43 : game::Opt().fmv_scale;
     if (scale == kFmvFill) {
@@ -159,9 +166,18 @@ void PlaceFilm(X86Context& ctx) {
         h /= kNarrow;
         return;
     }
-    x = kFrameMiddleX + (x - kFrameMiddleX) * kNarrow;
-    w *= kNarrow;
-    DrawFilmBars(ctx, (kFrameWidth - w) / 2);
+    NarrowToMiddle(ctx);
+}
+
+// a textured sprite over the whole frame in the menus' view (the title screen's picture)
+bool MenuBackground(X86Context& ctx) {
+    if (!g_view || g_view != kernel::R32(kViews + kMenuView * 4)) return false;
+    float x = kernel::G<float>(ctx.esp + kSpriteX);
+    float y = kernel::G<float>(ctx.esp + kSpriteY);
+    float w = kernel::G<float>(ctx.esp + kSpriteW);
+    float h = kernel::G<float>(ctx.esp + kSpriteH);
+    bool covers = x <= kSlack && y <= kSlack && w >= kFrameWidth - kSlack && h >= kFrameHeight - kSlack;
+    return covers && kernel::G<float>(ctx.esp + kSpriteUw) != 0.0f;
 }
 
 }  // namespace
@@ -257,7 +273,13 @@ X86_FUNC(sub_000DE3D0) {
 
 X86_EXTERN_FUNC(__imp__sub_000E6790);
 X86_FUNC(sub_000E6790) {
+    if (g_side_bars) return __imp__sub_000E6790(ctx, base);
     if (g_film) PlaceFilm(ctx);
+    // the menus stay 4:3, so their full screen picture does too
+    if (!g_film && app::Widescreen() && MenuBackground(ctx)) {
+        NarrowToMiddle(ctx);
+        return __imp__sub_000E6790(ctx, base);
+    }
     if (!g_view) return __imp__sub_000E6790(ctx, base);
     float left = kernel::G<float>(g_view + kViewLeft);
     float right = kernel::G<float>(g_view + kViewRight);
