@@ -23,7 +23,7 @@ inline constexpr uint32_t kMaxVibration = 200;
 inline constexpr uint32_t kGameFov = 75;  // the game's 60 degrees vertical as horizontal degrees on a 4:3 frame
 
 struct Options {
-    bool skip_intros = false;  // the EA GAMES and MGM INTERACTIVE logos at boot
+    bool skip_intros = false;  // the EA GAMES and MGM INTERACTIVE logos at boot and the intro film
     uint32_t fov = kGameFov;  // first person play, horizontal degrees on a 4:3 frame
     uint32_t viewmodel_fov = kGameFov;  // the gun and arms
     bool fps_counter = false;

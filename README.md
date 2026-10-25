@@ -40,7 +40,7 @@ The latest version of [007Nightfire-XBERecomp](https://github.com/TGP482/007Nigh
 - **Gyro Aiming** - Adds gyro aiming for controllers with motion sensors, such as the DualSense, DualShock 4 and Switch Pro Controller, with adjustable sensitivity. Works together with the right stick.
 
 ### General
-- **Skip Intro** - Skips the intro logos.
+- **Skip Intro** - Skips the intro logos and the intro movie.
 - **Pause On Focus Loss** - Pauses the game and its sound while the window is in the background or minimized.
 - **Audio Output** - Choose between Automatic, which follows your speakers, Mono, 2.0 Stereo and 5.1 Surround. 5.1 Surround places sounds behind you on the rear speakers.
 
