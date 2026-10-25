@@ -6,11 +6,11 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <iterator>
 #include <string>
 #include <vector>
 
 #include "common/menu.h"
+#include "common/recomp_pages.h"
 #include "core/log.h"
 #include "game/options_menu.h"
 #include "kernel/memory.h"
@@ -28,7 +28,7 @@ constexpr uint32_t kPauseWidgets = 0x10000028;
 constexpr uint32_t kScoreTab = 4;
 constexpr uint32_t kList = 8;          // the two column list
 constexpr uint32_t kRecompTab = 0x11;  // past the stock subs, 0 to 0x10
-constexpr uint32_t kTitleId = 0x1000006F;  // the shown tab's name above its page
+constexpr uint32_t kLegendId = 0x1000006F;  // the bar under the page, its buttons' legend
 constexpr int16_t kTabGap = 10;  // as 0x80030 lays out the multiplayer tabs
 constexpr uint32_t kTabs[] = {0, 1, 3, kScoreTab, kRecompTab};  // left to right; sub 2 is no tab
 
@@ -118,17 +118,14 @@ constexpr uint32_t kSoundLower = 3;
 constexpr uint32_t kSoundHigher = 4;
 
 constexpr char kRecompLabel[] = "RECOMP";
-constexpr char kRestoreDefaults[] = "RESTORE DEFAULTS";
-const char* const kCategories[] = {"RECOMP SETTINGS", "MOUSE AND KEYBOARD", "CONTROLLER"};  // rows::Page order
-constexpr int kCategoryCount = int(std::size(kCategories));
 
 constexpr uint32_t kMaxText = 128;  // a list cell holds 0x84 bytes
-// guest memory: RECOMP's definition, a measured size, its label, the title, then a text on its way to the list
+// guest memory: RECOMP's definition, a measured size, its label, the legend, then a text on its way to the list
 constexpr uint32_t kDefAt = 0;
 constexpr uint32_t kSizeAt = kDefSize;  // two floats
 constexpr uint32_t kLabelAt = kSizeAt + 8;
-constexpr uint32_t kTitleAt = kLabelAt + sizeof(kRecompLabel);
-constexpr uint32_t kTextAt = kTitleAt + kMaxText;
+constexpr uint32_t kLegendAt = kLabelAt + sizeof(kRecompLabel);  // the bar keeps the pointer
+constexpr uint32_t kTextAt = kLegendAt + kMaxText;
 constexpr uint32_t kScratchSize = kTextAt + kMaxText;
 
 struct Message {
@@ -144,7 +141,8 @@ struct Score {
 };
 Score g_score;
 
-enum class Level { Categories, Sections, Rows };
+using Level = app::RecompPages::Level;
+using Pressed = app::RecompPages::Pressed;
 
 struct Tab {
     uint32_t page = 0;  // the pause page, as last opened
@@ -153,14 +151,11 @@ struct Tab {
     float strip_left = 0.0f;
     float strip_right = 0.0f;
     bool shown = false;
-    Level level = Level::Categories;
-    int category = 0;      // the open category's rows::Page
-    size_t section = 0;    // the open section's heading, by its index in the page
-    int category_row = 0;  // the list row the categories and the sections were left on
-    int section_row = 0;
+    app::RecompPages pages;
     uint32_t frame = 0;  // the page's updates
     uint32_t pressed_frame = UINT32_MAX;  // A comes from the tab and the list both: one press an update
-    std::vector<std::string> values;  // the section's values as the list shows them
+    std::vector<std::string> values;  // the lines' values as the list shows them
+    std::string legend;  // as the bar shows it
 };
 Tab g_tab;
 
@@ -278,74 +273,13 @@ void LayOutTabs(X86Context& ctx, uint32_t player, bool latch) {
          double(g_tab.strip_right), double(labels), double(gap));
 }
 
-// The page's lines: the categories with rows, then a category's sections, then a section's rows.
-
-struct PageRows {
-    const Row* list = nullptr;
-    size_t count = 0;
-};
-
-PageRows RowsOf(int page) {
-    PageRows rows;
-    rows.list = app::rows::Page(page, &rows.count);
-    return rows;
-}
-
-std::vector<int> Categories() {
-    std::vector<int> pages;
-    for (int page = 0; page < kCategoryCount; page++) {
-        if (RowsOf(page).count) pages.push_back(page);
-    }
-    return pages;
-}
-
-// the headings a row follows, by their index in the page
-std::vector<size_t> Sections(int page) {
-    PageRows rows = RowsOf(page);
-    std::vector<size_t> headings;
-    for (size_t i = 0; i + 1 < rows.count; i++) {
-        bool filled = rows.list[i + 1].kind != Kind::Heading;
-        if (rows.list[i].kind == Kind::Heading && filled) headings.push_back(i);
-    }
-    return headings;
-}
-
-// the rows after a heading, up to the next
-std::vector<const Row*> SectionRows(int page, size_t heading) {
-    PageRows rows = RowsOf(page);
-    std::vector<const Row*> out;
-    for (size_t i = heading + 1; i < rows.count; i++) {
-        if (rows.list[i].kind == Kind::Heading) break;
-        out.push_back(&rows.list[i]);
-    }
-    return out;
-}
-
-struct Line {
-    std::string label;
-    std::string value;
-};
-
-std::vector<Line> Lines() {
-    std::vector<Line> lines;
-    if (g_tab.level == Level::Categories) {
-        for (int page : Categories()) lines.push_back({kCategories[page], {}});
-        lines.push_back({kRestoreDefaults, {}});
-    } else if (g_tab.level == Level::Sections) {
-        PageRows rows = RowsOf(g_tab.category);
-        for (size_t heading : Sections(g_tab.category)) lines.push_back({rows.list[heading].label, {}});
-    } else {
-        for (const Row* row : SectionRows(g_tab.category, g_tab.section)) {
-            lines.push_back({row->label, app::rows::Value(*row)});
-        }
-    }
-    return lines;
-}
-
-std::string Title() {
-    if (g_tab.level == Level::Categories) return kRecompLabel;
-    if (g_tab.level == Level::Sections) return kCategories[g_tab.category];
-    return RowsOf(g_tab.category).list[g_tab.section].label;
+// in the game's legend form, "~" and a button; prompts.cpp names the keys
+std::string Legend(const Row* selected) {
+    if (g_tab.pages.level() == Level::Categories) return "~A Select  ~S Resume";
+    if (g_tab.pages.level() == Level::Sections) return "~A Select  ~B Back";
+    if (app::Capturing()) return "Press a key or mouse button to bind, Escape cancels";
+    if (selected && selected->kind == Kind::Bind) return "~A Change key  ~B Back";
+    return "~H Change  ~B Back";
 }
 
 // Showing the page.
@@ -353,7 +287,7 @@ std::string Title() {
 // left and right change a row's value instead of moving to the next tab
 void ApplyNav() {
     if (!g_tab.page) return;
-    bool rows = g_tab.shown && g_tab.level == Level::Rows;
+    bool rows = g_tab.shown && g_tab.pages.level() == Level::Rows;
     kernel::W32(g_tab.page + kPageNav, rows ? kNoNav : g_tab.stock_nav);
 }
 
@@ -374,28 +308,36 @@ void ResetList(X86Context& ctx, uint32_t player) {
     SendToList(ctx, player, kColumnAlign, kValueColumn, kAlignValue);
 }
 
-// the level's title and lines, with that row selected
-void ApplyLevel(X86Context& ctx, uint32_t player, int row) {
-    kernel::CallGuest(ctx, kSendToId, {player, kTitleId, kSetLabel, GuestText(kTitleAt, Title()), 0});
+void UpdateLegend(X86Context& ctx, uint32_t player, const Row* selected) {
+    std::string legend = Legend(selected);
+    if (legend == g_tab.legend) return;
+    g_tab.legend = legend;
+    kernel::CallGuest(ctx, kSendToId, {player, kLegendId, kSetLabel, GuestText(kLegendAt, legend), 0});
+}
+
+// the level's lines, at the line it remembers
+void ApplyLevel(X86Context& ctx, uint32_t player) {
     ResetList(ctx, player);
-    std::vector<Line> lines = Lines();
+    std::vector<app::RecompPages::Line> lines = g_tab.pages.Lines();
     g_tab.values.clear();
-    for (const Line& line : lines) {
+    for (const app::RecompPages::Line& line : lines) {
         uint32_t index = SendToList(ctx, player, kAddRow, 0, 0);
         SetCell(ctx, player, index, kLabelColumn, line.label);
         if (!line.value.empty()) SetCell(ctx, player, index, kValueColumn, line.value);
         g_tab.values.push_back(line.value);
     }
     int last = std::max(int(lines.size()) - 1, 0);
-    SendToList(ctx, player, kSelectRow, uint32_t(std::clamp(row, 0, last)));
+    SendToList(ctx, player, kSelectRow, uint32_t(std::clamp(g_tab.pages.line(), 0, last)));
+    UpdateLegend(ctx, player, nullptr);
     ApplyNav();
 }
 
 void ShowTab(X86Context& ctx, uint32_t player, bool shown) {
     g_tab.shown = shown;
     if (shown) {
-        g_tab.level = Level::Categories;
-        ApplyLevel(ctx, player, g_tab.category_row);
+        g_tab.legend.clear();  // the stock tabs wrote the bar
+        g_tab.pages.Top();
+        ApplyLevel(ctx, player);
     }
     ApplyNav();
 }
@@ -407,9 +349,7 @@ void OpenTab(X86Context& ctx, uint32_t player, uint32_t page) {
         g_tab.page = page;
         g_tab.stock_nav = R32(page + kPageNav);
     }
-    g_tab.level = Level::Categories;
-    g_tab.category_row = 0;
-    g_tab.section_row = 0;
+    g_tab.pages.Open();
     LayOutTabs(ctx, player, fresh);
     uint32_t focus = R32(page + kPageFocus);
     bool focused = focus && R32(focus + kId) == kPauseWidgets && R32(focus + kSub) == kRecompTab;
@@ -418,69 +358,21 @@ void OpenTab(X86Context& ctx, uint32_t player, uint32_t page) {
 
 // Input.
 
-void StepRow(X86Context& ctx, const Row& row, int step) {
-    app::rows::Value(row, step);
-    kernel::CallGuest(ctx, kPlaySound, {step < 0 ? kSoundLower : kSoundHigher});
-}
-
-void PressCategory(X86Context& ctx, uint32_t player, int row) {
-    std::vector<int> pages = Categories();
-    if (row < 0 || row > int(pages.size())) return;
-    g_tab.category_row = row;
-    if (row == int(pages.size())) {
-        for (int page : pages) app::rows::Defaults(page);
-        return;
-    }
-    g_tab.category = pages[size_t(row)];
-    g_tab.level = Level::Sections;
-    ApplyLevel(ctx, player, 0);
-}
-
-void PressSection(X86Context& ctx, uint32_t player, int row) {
-    std::vector<size_t> headings = Sections(g_tab.category);
-    if (row < 0 || row >= int(headings.size())) return;
-    g_tab.section_row = row;
-    g_tab.section = headings[size_t(row)];
-    g_tab.level = Level::Rows;
-    ApplyLevel(ctx, player, 0);
-}
-
-// a bind row waits for a key, a value row steps on, as a click on it does
-void PressRow(X86Context& ctx, int row) {
-    std::vector<const Row*> rows = SectionRows(g_tab.category, g_tab.section);
-    if (row < 0 || row >= int(rows.size())) return;
-    const Row& pressed = *rows[size_t(row)];
-    if (pressed.kind == Kind::Bind) {
-        app::rows::Bind(pressed);
-    } else {
-        StepRow(ctx, pressed, 1);
-    }
-}
+void PlayStep(X86Context& ctx, int step) { kernel::CallGuest(ctx, kPlaySound, {step < 0 ? kSoundLower : kSoundHigher}); }
 
 void Press(X86Context& ctx, uint32_t player) {
     if (g_tab.pressed_frame == g_tab.frame || app::Capturing()) return;
     g_tab.pressed_frame = g_tab.frame;
-    int row = int(SendToList(ctx, player, kSelectedRow));
-    if (g_tab.level == Level::Categories) {
-        PressCategory(ctx, player, row);
-    } else if (g_tab.level == Level::Sections) {
-        PressSection(ctx, player, row);
-    } else {
-        PressRow(ctx, row);
-    }
+    int line = int(SendToList(ctx, player, kSelectedRow));
+    Pressed pressed = g_tab.pages.Press(line);
+    if (pressed == Pressed::Opened) ApplyLevel(ctx, player);
+    if (pressed == Pressed::Stepped) PlayStep(ctx, 1);
 }
 
 // B goes a level up; false on the categories, where it does what it always did
 bool BackOut(X86Context& ctx, uint32_t player) {
-    if (!g_tab.shown || g_tab.level == Level::Categories) return false;
-    if (app::Capturing()) return true;
-    if (g_tab.level == Level::Rows) {
-        g_tab.level = Level::Sections;
-        ApplyLevel(ctx, player, g_tab.section_row);
-    } else {
-        g_tab.level = Level::Categories;
-        ApplyLevel(ctx, player, g_tab.category_row);
-    }
+    if (!g_tab.shown || g_tab.pages.level() == Level::Categories) return false;
+    if (!app::Capturing() && g_tab.pages.Back()) ApplyLevel(ctx, player);
     return true;
 }
 
@@ -489,25 +381,24 @@ bool ActionDown(X86Context& ctx, uint32_t port, uint32_t action) {
 }
 
 // the values as they are now, a key capture's end and the F10 panel's changes among them
-void UpdateValues(X86Context& ctx, uint32_t player, const std::vector<const Row*>& rows) {
-    for (size_t i = 0; i < rows.size() && i < g_tab.values.size(); i++) {
-        std::string value = app::rows::Value(*rows[i]);
-        if (value == g_tab.values[i]) continue;
-        g_tab.values[i] = value;
-        SetCell(ctx, player, uint32_t(i), kValueColumn, value);
+void UpdateValues(X86Context& ctx, uint32_t player) {
+    std::vector<app::RecompPages::Line> lines = g_tab.pages.Lines();
+    for (size_t i = 0; i < lines.size() && i < g_tab.values.size(); i++) {
+        if (lines[i].value == g_tab.values[i]) continue;
+        g_tab.values[i] = lines[i].value;
+        SetCell(ctx, player, uint32_t(i), kValueColumn, lines[i].value);
     }
 }
 
 void UpdateTab(X86Context& ctx, uint32_t player) {
     g_tab.frame++;
-    if (!g_tab.shown || g_tab.level != Level::Rows) return;
-    std::vector<const Row*> rows = SectionRows(g_tab.category, g_tab.section);
+    if (!g_tab.shown || g_tab.pages.level() != Level::Rows) return;
     uint32_t port = G<uint16_t>(kRecords + (player & 0xFF) * kRecordSize + kRecordPort);
     int step = int(ActionDown(ctx, port, kRight)) - int(ActionDown(ctx, port, kLeft));
-    int row = int(SendToList(ctx, player, kSelectedRow));
-    bool on_row = row >= 0 && row < int(rows.size());
-    if (step && on_row && !app::Capturing()) StepRow(ctx, *rows[size_t(row)], step);
-    UpdateValues(ctx, player, rows);
+    int line = int(SendToList(ctx, player, kSelectedRow));
+    if (step && !app::Capturing() && g_tab.pages.Step(line, step)) PlayStep(ctx, step);
+    UpdateValues(ctx, player);
+    UpdateLegend(ctx, player, g_tab.pages.RowAt(line));
 }
 
 }  // namespace

@@ -33,8 +33,8 @@ constexpr uint32_t kPictureSize = 0x50;
 constexpr uint32_t kPictureWidth = 0x40;
 constexpr uint32_t kPictureHeight = 0x44;
 // a slot takes its picture's width, 5 to its label and 20 to the next slot; the blank's width takes back most of
-// that, so the longer labels still fit the panel with 10 between them
-constexpr float kBlankWidth = -15.0f;
+// that, so the longer labels still fit the panel with 7 between them
+constexpr float kBlankWidth = -18.0f;
 
 constexpr uint32_t kLabelSize = 64;
 constexpr uint32_t kSlotSize = kPictureSize + kLabelSize;
@@ -91,7 +91,10 @@ void SwapSlot(X86Context& ctx, uint32_t i, const std::string& key) {
 
 }  // namespace
 
+void DrivingRecompLegend(X86Context& ctx);  // options_menu.cpp
+
 void DrivingLegendKeys(X86Context& ctx, uint8_t*) {
+    DrivingRecompLegend(ctx);
     if (!input::KeyboardActive()) return;
     uint32_t count = std::min(ctx.esi, kMaxSlots);
     for (uint32_t i = 0; i < count; i++) {
