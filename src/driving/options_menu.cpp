@@ -4,15 +4,19 @@
 // here with RECOMP added, the page is drawn where the stock pages are, and the menu's messages drive it while it is
 // shown. Up and down move in the list, A opens, binds or steps a row, B goes back, left and right change a value.
 #include <algorithm>
+#include <atomic>
 #include <bit>
+#include <chrono>
 #include <cstring>
 #include <initializer_list>
 #include <string>
 #include <vector>
 
 #include "common/menu.h"
+#include "common/mouse_keyboard.h"
 #include "common/recomp_pages.h"
 #include "core/log.h"
+#include "driving/pause_menu.h"
 #include "kernel/memory.h"
 #include "xdk/hle.h"
 
@@ -30,6 +34,7 @@ constexpr uint32_t kSecondMissionLine = 0x114;
 constexpr uint32_t kStockTabs[] = {0x11C, 0x120, 0x128, 0x12C};  // MISSION, OBJECTIVES, CONTROLS, SCORE
 constexpr uint32_t kChangePagePicture = 0x1FC;  // the dpad left and right in the legend
 constexpr uint32_t kTab = 0x470;
+constexpr uint32_t kMissionLine = 0x474;  // the selected one
 constexpr uint32_t kConfirmingQuit = 0x484;
 constexpr uint32_t kObjectivesHeld = 0x488;  // OBJECTIVES keeps the dpad while 1
 constexpr uint32_t kHidesTabs = 0x454;       // byte
@@ -39,7 +44,9 @@ constexpr uint32_t kMissionTab = 0;
 constexpr uint32_t kObjectivesTab = 1;
 constexpr uint32_t kScoreTab = 3;
 constexpr uint32_t kRecompTab = 4;  // the page switch draws nothing for it
+constexpr uint32_t kTablessTab = 5;  // the tabless mode's page, RESTART and QUIT alone
 constexpr int kTabCount = 5;
+constexpr int kMissionLines = 3;
 // a text object: x, y at +0, +4 and its text's string id
 constexpr uint32_t kObjectY = 0x04;
 constexpr uint32_t kObjectString = 0x34;
@@ -80,6 +87,8 @@ constexpr float kTabRaise = 4.0f;    // below the first tab object's y
 constexpr float kLinesLeft = kTabsLeft;
 constexpr float kLinesRight = kTabsLeft + kTabsSpan;
 constexpr float kBoxBottom = 310.0f;
+constexpr float kFrameWidth = 640.0f;  // the pause lays out its text on the 640x480 frame
+constexpr float kFrameHeight = 480.0f;
 
 // the legend's flags on the pause draw's stack, by the button and label they add (0xDEBB8 on)
 constexpr uint32_t kLegendChangePage = 0x19;  // dpad left and right
@@ -178,7 +187,13 @@ void Draw(X86Context& ctx, const Pen& pen, uint32_t text, float x, float y, uint
 
 struct TabLabel {
     uint32_t text;
+    float x;
     float width;
+};
+
+struct TabStrip {
+    TabLabel labels[kTabCount];
+    float y;
 };
 
 uint32_t TabText(X86Context& ctx, uint32_t menu, int tab) {
@@ -187,23 +202,31 @@ uint32_t TabText(X86Context& ctx, uint32_t menu, int tab) {
     return kernel::CallGuest(ctx, kStringText, {R32(object + kObjectString)});
 }
 
-void DrawTabs(X86Context& ctx, uint32_t menu) {
-    Pen pen = PenFor(menu, kStockTabs[0]);
-    TabLabel labels[kTabCount];
+TabStrip LayTabs(X86Context& ctx, uint32_t menu, const Pen& pen) {
+    TabStrip strip{};
     float total = 0.0f;
     for (int i = 0; i < kTabCount; i++) {
         uint32_t text = TabText(ctx, menu, i);
-        labels[i] = {text, Measure(ctx, pen, text)};
-        total += labels[i].width;
+        strip.labels[i] = {text, 0.0f, Measure(ctx, pen, text)};
+        total += strip.labels[i].width;
     }
     float gap = (kTabsSpan - total) / float(kTabCount - 1);
     float x = kTabsLeft;
-    float y = ObjectY(menu, kStockTabs[0]) + kTabRaise;
+    for (TabLabel& label : strip.labels) {
+        label.x = x;
+        x += label.width + gap;
+    }
+    strip.y = ObjectY(menu, kStockTabs[0]) + kTabRaise;
+    return strip;
+}
+
+void DrawTabs(X86Context& ctx, uint32_t menu) {
+    Pen pen = PenFor(menu, kStockTabs[0]);
+    TabStrip strip = LayTabs(ctx, menu, pen);
     uint32_t selected = R32(menu + kTab);
     for (int i = 0; i < kTabCount; i++) {
         uint32_t colour = uint32_t(i) == selected ? kSelectedColour : kTabColour;
-        Draw(ctx, pen, labels[i].text, x, y, colour);
-        x += labels[i].width + gap;
+        Draw(ctx, pen, strip.labels[i].text, strip.labels[i].x, strip.y, colour);
     }
 }
 
@@ -337,11 +360,116 @@ bool TakeMessage(X86Context& ctx, uint32_t menu, uint32_t message) {
     return true;
 }
 
+// The mouse: the pointer picks the line under it (a mission line or a RECOMP row) as the dpad would and a click on a
+// tab shows its page. A click on a line presses A and the right button presses B (keyboard.cpp).
+
+constexpr int64_t kShownMs = 100;  // drawn this recently, the pause is up
+std::atomic<int64_t> g_drawn_ms{0};
+std::atomic<bool> g_accepting{false};
+
+int64_t NowMs() {
+    auto since = std::chrono::steady_clock::now().time_since_epoch();
+    return std::chrono::duration_cast<std::chrono::milliseconds>(since).count();
+}
+
+struct Pointer {
+    float x;
+    float y;
+    bool moved;
+    bool click;
+};
+
+// false while the pointer is not shown
+bool ReadPointer(Pointer& p) {
+    static float last_x = -1.0f;
+    static float last_y = -1.0f;
+    static bool was_down = false;
+    float fx;
+    float fy;
+    bool shown = input::Cursor(fx, fy);
+    bool down = shown && input::LeftButton();
+    // the button that binds in a key capture clicks nothing
+    p.click = down && !was_down && !app::Capturing();
+    was_down = down;
+    if (!down) g_accepting = false;
+    if (!shown) {
+        last_x = -1.0f;
+        return false;
+    }
+    p.x = fx * kFrameWidth;
+    p.y = fy * kFrameHeight;
+    p.moved = p.x != last_x || p.y != last_y;
+    last_x = p.x;
+    last_y = p.y;
+    return true;
+}
+
+// the line under the pointer counted from the first, -1 when none of the count is
+int LineAt(float y, float first_y, float pitch, int count) {
+    if (pitch <= 0.0f || y < first_y) return -1;
+    int line = int((y - first_y) / pitch);
+    return line < count ? line : -1;
+}
+
+void ClickTab(X86Context& ctx, uint32_t menu, const Pointer& p) {
+    if (!p.click || !TabsShown(menu) || !TabsMove(menu)) return;
+    TabStrip strip = LayTabs(ctx, menu, PenFor(menu, kStockTabs[0]));
+    float pitch = ObjectY(menu, kSecondMissionLine) - ObjectY(menu, kFirstMissionLine);
+    if (p.y < strip.y || p.y >= strip.y + pitch) return;
+    for (int i = 0; i < kTabCount; i++) {
+        const TabLabel& label = strip.labels[i];
+        if (p.x < label.x || p.x >= label.x + label.width) continue;
+        if (R32(menu + kTab) != uint32_t(i)) SelectTab(ctx, menu, uint32_t(i));
+        return;
+    }
+}
+
+void PointMissionLine(X86Context& ctx, uint32_t menu, const Pointer& p) {
+    uint32_t tab = R32(menu + kTab);
+    if ((tab != kMissionTab && tab != kTablessTab) || R32(menu + kConfirmingQuit) != 0) return;
+    float first = ObjectY(menu, kFirstMissionLine);
+    float pitch = ObjectY(menu, kSecondMissionLine) - first;
+    int line = LineAt(p.y, first, pitch, kMissionLines);
+    int lowest = R32(menu + kMode) == kTablessMode ? 1 : 0;  // the tabless page has no CONTINUE
+    if (line < lowest) return;
+    if (p.click) g_accepting = true;
+    if ((!p.moved && !p.click) || R32(menu + kMissionLine) == uint32_t(line)) return;
+    kernel::W32(menu + kMissionLine, uint32_t(line));
+    PlayToggle(ctx);
+}
+
+void PointRecompLine(X86Context& ctx, uint32_t menu, const Pointer& p) {
+    if (!RecompShown(menu)) return;
+    Lines layout = LinesFor(menu);
+    int count = int(g_page.pages.Lines().size());
+    int shown = LineAt(p.y, layout.first_y, layout.pitch, std::min(layout.shown, count - g_page.top));
+    if (shown < 0) return;
+    if (p.click) g_accepting = true;
+    int line = g_page.top + shown;
+    if ((!p.moved && !p.click) || g_page.line == line) return;
+    g_page.line = line;
+    PlayToggle(ctx);
+}
+
+void UpdatePauseMouse(X86Context& ctx, uint32_t menu) {
+    g_drawn_ms = NowMs();
+    Pointer p{};
+    if (!ReadPointer(p)) return;
+    ClickTab(ctx, menu, p);
+    PointMissionLine(ctx, menu, p);
+    PointRecompLine(ctx, menu, p);
+}
+
 }  // namespace
+
+bool driving::PauseShown() { return NowMs() - g_drawn_ms < kShownMs; }
+
+bool driving::ClickAccepts() { return g_accepting; }
 
 // at 0xDE9E0, after the pages are drawn: RECOMP's page and its legend
 void DrivingRecompPage(X86Context& ctx, uint8_t*) {
     uint32_t menu = ctx.ebp;
+    UpdatePauseMouse(ctx, menu);
     if (!RecompShown(menu)) return;
     DrawPage(ctx, menu);
     SetLegend(ctx.esp, g_page.pages.level());

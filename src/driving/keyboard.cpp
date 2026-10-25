@@ -9,6 +9,7 @@
 #include <windows.h>
 
 #include "common/mouse_keyboard.h"
+#include "driving/pause_menu.h"
 #include "kernel/kernel.h"
 
 // Driving turns the pad into actions through one table (0x51250), filled from the controls files for the mode: the one
@@ -85,9 +86,11 @@ constexpr Key kKeys[] = {
     {"car_pause", kStart, 1},
 };
 
-// not bindable, as on foot: the arrows are the dpad, Enter is A, Backspace is Back, the same in every layout
+// not bindable, as on foot: the arrows are the dpad, Enter is A, Backspace is Back, the same in every layout; in the
+// pause a click on a line is A and the right button B
 constexpr int kDpadKeys[] = {VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT};
 constexpr int kAnalogA = 0;
+constexpr int kAnalogB = 1;
 constexpr uint16_t kBack = 0x20;
 
 // the channel the table in use gives the action, or -1 when this mode has none
@@ -114,9 +117,19 @@ bool Foreground() {
 
 bool Down(int vk) { return GetAsyncKeyState(vk) < 0; }
 
+// the pause shows the menu cursor; its buttons as the pad's
+void PauseMouse(input::Pad& pad) {
+    bool pause = driving::PauseShown();
+    input::SetMenu(pause);
+    if (!pause || !input::CursorShown() || !Foreground()) return;
+    if (driving::ClickAccepts()) pad.analog[kAnalogA] = 0xFF;
+    if (Down(VK_RBUTTON)) pad.analog[kAnalogB] = 0xFF;
+}
+
 }  // namespace
 
 void input::ImageKeys(Pad& pad) {
+    PauseMouse(pad);
     int sticks[kAnalogChannel] = {};
     for (const Key& k : kKeys) {
         if (!Held(k.id)) continue;
