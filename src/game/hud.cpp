@@ -6,6 +6,7 @@
 
 #include "app/app.h"
 #include "common/options.h"
+#include "game/animated_textures.h"
 #include "xdk/hle.h"
 
 // The 2D is laid out on the 640x480 frame, which a widescreen output shows 16:9. While a player's view, the HUD's or
@@ -233,9 +234,10 @@ X86_FUNC(sub_000D9410) {
     g_view = 0;
 }
 
-// an auto item takes its side from the first sprites it flushes
+// an auto item takes its side from the first sprites it flushes; the sprites' animated textures read their own clock
 X86_EXTERN_FUNC(__imp__sub_000DE3D0);
 X86_FUNC(sub_000DE3D0) {
+    game::TextureClock clock;
     if (g_view && g_anchor == kAuto) g_anchor = AnchorAt(kernel::R32(ctx.esp + 4), kernel::G<int16_t>(ctx.esp + 8));
     __imp__sub_000DE3D0(ctx, base);
 }
