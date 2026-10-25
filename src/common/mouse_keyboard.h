@@ -32,7 +32,6 @@ void SetMenu(bool menu);  // game thread, each frame: a menu is up
 bool CursorShown();       // in a menu with the keyboard or mouse used last
 // the cursor in the shown frame, 0 to 1 across and down; false while it is not shown
 bool Cursor(float& x, float& y);
-void MoveCursorDown(float y);  // to this height of the shown frame, 0 to 1, where it is across
 bool LeftButton();  // held in the game window
 // the keys bound to the action with this id are held and the game has the input
 bool Held(std::string_view id);

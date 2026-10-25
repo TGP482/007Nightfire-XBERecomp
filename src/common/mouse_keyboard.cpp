@@ -533,14 +533,6 @@ bool Cursor(float& x, float& y) {
     return true;
 }
 
-void MoveCursorDown(float y) {
-    POINT p;
-    Shown s;
-    if (!Active() || !GetCursorPos(&p) || !ShownFrame(s)) return;
-    POINT to{0, LONG(std::lround(s.top + y * s.height))};
-    if (ClientToScreen(g_hwnd, &to)) SetCursorPos(p.x, to.y);
-}
-
 bool LeftButton() { return Active() && !g_settle && Down(VK_LBUTTON); }
 
 bool Held(std::string_view id) {

@@ -146,14 +146,6 @@ bool Step(X86Context& ctx, uint32_t value, int delta) {
     return true;
 }
 
-// the carousel's band text, the row of the same id at sub 2
-uint32_t BandOf(uint32_t page, uint32_t row) {
-    int n = 0;
-    for (uint32_t w = FirstWidget(page); w && n < kMaxWidgets; w = R32(w), n++)
-        if (TypeOf(w) == kText && R32(w + kId) == R32(row + kId) && R32(w + kSub) == kBand) return w;
-    return 0;
-}
-
 // 0x73370's pick: the smallest selectable widget strictly around the point (page pixels), the lower z on a tie
 uint32_t WidgetAt(uint32_t page, int px, int py) {
     uint32_t best = 0;
@@ -174,16 +166,20 @@ uint32_t WidgetAt(uint32_t page, int px, int py) {
     return best;
 }
 
-// a carousel text shown under the point; they are not selectable
+// the carousel text whose middle is nearest the point down, across it; they are not selectable
 uint32_t CarouselRowAt(uint32_t page, int px, int py) {
+    uint32_t best = 0;
+    int best_off = INT_MAX;
     int n = 0;
     for (uint32_t w = FirstWidget(page); w && n < kMaxWidgets; w = R32(w), n++) {
         Rect r = RectOf(w);
-        r.y -= kRowSlack;
-        r.h += 2 * kRowSlack;
-        if (!(G<uint8_t>(w + kFlags) & 1) && r.Around(px, py) && CarouselRow(page, w)) return w;
+        if ((G<uint8_t>(w + kFlags) & 1) || px <= r.x || px >= r.x + r.w) continue;
+        int off = std::abs(2 * py - (2 * r.y + r.h));  // twice the distance from its middle
+        if (off > r.h + 2 * kRowSlack || off >= best_off || !CarouselRow(page, w)) continue;
+        best = w;
+        best_off = off;
     }
-    return 0;
+    return best;
 }
 
 // one frame of an action, as if the keyboard's player pressed it; the page's widgets read it next
@@ -266,7 +262,10 @@ void Point(X86Context& ctx, uint32_t record, uint32_t page) {
     static int last_x = INT_MIN;
     static int last_y = INT_MIN;
     static bool was_down = false;
-    static uint32_t last_row = 0;
+    static int last_sub = -1;  // the carousel row the pointer came onto, -1 off the carousel
+    static uint32_t last_page = 0;
+    if (page != last_page) last_sub = -1;
+    last_page = page;
     LogPage(page);
     int x;
     int y;
@@ -277,7 +276,7 @@ void Point(X86Context& ctx, uint32_t record, uint32_t page) {
     was_down = down;
     if (!shown) {
         last_x = INT_MIN;
-        last_row = 0;
+        last_sub = -1;
         return;
     }
     bool moved = x != last_x || y != last_y;
@@ -287,22 +286,18 @@ void Point(X86Context& ctx, uint32_t record, uint32_t page) {
     Rect p = RectOf(page);
     int px = x - p.x;
     int py = y - p.y;
-    // A carousel row takes the band when the mouse comes onto it, and the pointer moves with its text, so what is under
-    // the pointer stays what was chosen. A click accepts the band's.
+    // Coming onto a carousel row brings the item it shows then into the band; the pointer stays. A click accepts the
+    // band's.
     uint32_t row = CarouselRowAt(page, px, py);
-    uint32_t entered = row != last_row ? row : 0;
-    last_row = row;
     if (row) {
+        int sub = int(R32(row + kSub));
         uint32_t value = CarouselValue(page);
-        uint32_t band = BandOf(page, row);
-        if (entered && value && band && Step(ctx, value, int(R32(row + kSub)) - int(kBand))) {
-            Rect b = RectOf(band);
-            input::MoveCursorDown((float(p.y + b.y) + float(b.h) / 2 + ViewTop()) / kFrameHeight);
-            last_row = band;
-        }
+        if (sub != last_sub && value) Step(ctx, value, sub - int(kBand));
+        last_sub = sub;
         if (click) Tap(kAccept);
         return;
     }
+    last_sub = -1;
     uint32_t w = WidgetAt(page, px, py);
     if (!w) return;
     uint32_t focus = R32(page + kPageFocus);
