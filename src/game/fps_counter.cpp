@@ -3,20 +3,23 @@
 
 #include "app/app.h"
 #include "common/options.h"
+#include "core/log.h"
+#include "game/main_menu.h"
 #include "kernel/memory.h"
 #include "xdk/hle.h"
 
-// The frame rate, top left, in the game's own text font: drawn as the HUD's text items are (0xD9410), just before
-// the game presents the frame.
+// The frame rate, top left, and the main menu watermark, in the game's own text font: drawn as the HUD's text items
+// are (0xD9410), just before the game presents the frame.
 namespace {
 
 using kernel::G;
 
 constexpr uint32_t kFrameOpen = 0x2C5754;  // byte: a frame 0xE43A0 presents
-// (x, y, unused, colour 0xRRGGBBAA, -1, text, style, scale pair or 0, flags, length, width): 640x480 units, y the
-// baseline; the glyphs go into the records below
+// (x, y, colour, shadow colour, -1, text, style, scale pair or 0, flags, length, width): 640x480 units, y the
+// baseline, colours 0xRRGGBBAA with 0x80 full; the glyphs go into the records below. It returns the text's size.
 constexpr uint32_t kText = 0x6A340;
-constexpr uint32_t kDropShadow = 0x1000;  // the HUD text's black copy a line down and right
+constexpr uint32_t kMeasureOnly = 1;  // no glyphs, only the size
+constexpr uint32_t kDropShadow = 0x1000;  // the HUD text's shadow colour copy a line down and right
 constexpr uint32_t kRecords = 0x29DC00;
 constexpr uint32_t kRecordCount = 0x29E810;
 constexpr uint32_t kFlushRecords = 0xDE3D0;  // (records, count)
@@ -28,10 +31,17 @@ constexpr uint32_t kLights = 0xDE610;
 // 0xFF then a font from the table at 0x17BD90: 1 is the default text font, 13 lines high
 constexpr char kStyle[] = "\xFF\x01";
 constexpr float kLineHeight = 13;
+constexpr float kFrameWidth = 640;
 constexpr float kMargin = 8;  // as the other recomps, on the frame 480 high
 constexpr float kNarrow = 0.75f;  // a 4:3 glyph on the frame shown 16:9
 constexpr uint32_t kWhite = 0xFFFFFFFF;
+constexpr uint32_t kBlack = 0x000000FF;
+constexpr uint32_t kGrey = 0x5D5D5DFF;  // the other recomps' watermark grey, 186 of 255
 constexpr uint32_t kUnused = 0xFFFFFFFF;  // as 0xD9410 passes it
+
+// the watermark ends this far in from the frame's right edge, as on the other recomps
+constexpr char kWatermark[] = "XBE Recomp V1";
+constexpr float kWatermarkRight = 80;
 
 // guest memory 0x6A340 reads: the style, the scale pair, the text
 constexpr uint32_t kScaleAt = 4;
@@ -40,23 +50,68 @@ constexpr uint32_t kScratchSize = 64;
 
 uint32_t Bits(float value) { return std::bit_cast<uint32_t>(value); }
 
-void DrawFps(X86Context& ctx) {
-    static const uint32_t scratch = mem::AllocSystem(kScratchSize);
-    char line[kScratchSize - kTextAt];
-    int length = std::snprintf(line, sizeof(line), "FPS: %.1f", double(game::g_fps.load()));
+float Wide() { return app::Widescreen() ? kNarrow : 1.0f; }
+
+struct Line {
+    float x;
+    float y;
+    uint32_t colour;
+    uint32_t shadow;
+    uint32_t flags;
+};
+
+// the text into guest memory with the style and scale; its length
+uint32_t Stage(uint32_t scratch, const char* text) {
     for (uint32_t i = 0; i < sizeof(kStyle); i++) G<char>(scratch + i) = kStyle[i];
-    for (int i = 0; i <= length; i++) G<char>(scratch + kTextAt + uint32_t(i)) = line[i];
-    float wide = app::Widescreen() ? kNarrow : 1.0f;
-    G<float>(scratch + kScaleAt) = wide;
+    G<float>(scratch + kScaleAt) = Wide();
     G<float>(scratch + kScaleAt + 4) = 1.0f;
+    uint32_t length = 0;
+    while (text[length] && kTextAt + length + 1 < kScratchSize) {
+        G<char>(scratch + kTextAt + length) = text[length];
+        length++;
+    }
+    G<char>(scratch + kTextAt + length) = 0;
+    return length;
+}
+
+// the width when flags is kMeasureOnly
+float Text(X86Context& ctx, uint32_t scratch, uint32_t length, const Line& line) {
+    uint32_t text = scratch + kTextAt;
+    uint32_t scale = scratch + kScaleAt;
+    uint32_t size = kernel::CallGuest(ctx, kText,
+                                      {Bits(line.x), Bits(line.y), line.colour, line.shadow, kUnused, text, scratch,
+                                       scale, line.flags, length, Bits(0)});
+    return size ? G<float>(size) : 0.0f;
+}
+
+void BeginText(X86Context& ctx) {
     kernel::CallGuest(ctx, kAmbient, {0xFF, 0xFF, 0xFF, 0xFF});
     kernel::CallGuest(ctx, kLightMode, {2});
     kernel::CallGuest(ctx, kLights, {0, 0, 0, 0, 0});
-    kernel::CallGuest(ctx, kText,
-                      {Bits(kMargin * wide), Bits(kMargin + kLineHeight), 0, kWhite, kUnused, scratch + kTextAt, scratch,
-                       scratch + kScaleAt, kDropShadow, uint32_t(length), Bits(0)});
+}
+
+void EndText(X86Context& ctx) {
     kernel::CallGuest(ctx, kFlushRecords, {kRecords, kernel::R32(kRecordCount)});
     kernel::W32(kRecordCount, 0);
+}
+
+void DrawFps(X86Context& ctx, uint32_t scratch) {
+    char line[kScratchSize - kTextAt];
+    std::snprintf(line, sizeof(line), "FPS: %.1f", double(game::g_fps.load()));
+    uint32_t length = Stage(scratch, line);
+    Text(ctx, scratch, length, {kMargin * Wide(), kMargin + kLineHeight, kWhite, kBlack, kDropShadow});
+}
+
+// right aligned on the legend's row, grey without a shadow; it moves with the page
+void DrawWatermark(X86Context& ctx, uint32_t scratch, const game::LegendRow& legend) {
+    uint32_t length = Stage(scratch, kWatermark);
+    float right = kFrameWidth - kWatermarkRight * Wide() + legend.left * Wide();
+    float baseline = legend.top + (legend.height + kLineHeight) / 2;
+    float width = Text(ctx, scratch, length, {0, 0, kGrey, kGrey, kMeasureOnly});
+    static bool logged = false;
+    if (!logged) LOGR("watermark: x %.1f baseline %.1f width %.1f", double(right - width), double(baseline), double(width));
+    logged = true;
+    Text(ctx, scratch, length, {right - width, baseline, kGrey, kGrey, 0});
 }
 
 }  // namespace
@@ -64,6 +119,19 @@ void DrawFps(X86Context& ctx) {
 // the game's end of a frame
 X86_EXTERN_FUNC(__imp__sub_000E43A0);
 X86_FUNC(sub_000E43A0) {
-    if (game::Opt().fps_counter && G<uint8_t>(kFrameOpen)) DrawFps(ctx);
+    static const uint32_t scratch = mem::AllocSystem(kScratchSize);
+    // also called with no frame open, by the loading loop: the legend waits for the frame that presents
+    if (!G<uint8_t>(kFrameOpen)) {
+        __imp__sub_000E43A0(ctx, base);
+        return;
+    }
+    game::LegendRow legend = game::TakeMainMenuLegend();
+    bool fps = game::Opt().fps_counter;
+    if (fps || legend.shown) {
+        BeginText(ctx);
+        if (fps) DrawFps(ctx, scratch);
+        if (legend.shown) DrawWatermark(ctx, scratch, legend);
+        EndText(ctx);
+    }
     __imp__sub_000E43A0(ctx, base);
 }

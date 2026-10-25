@@ -5,6 +5,7 @@
 #include "app/app.h"
 #include "common/mouse_keyboard.h"
 #include "core/log.h"
+#include "game/main_menu.h"
 #include "xdk/hle.h"
 
 // The game's menus run on a pointer of their own: each page update (0x95A80) first focuses the widget under the
@@ -84,6 +85,11 @@ constexpr float kNarrow = 0.75f;
 constexpr float kFrameWidth = 640.0f;
 constexpr float kFrameHeight = 480.0f;
 constexpr int kMaxWidgets = 256;
+// the main menu page and its button legend text
+constexpr uint32_t kMainMenuId = 0x40000002;
+constexpr uint32_t kLegendId = 0x10000001;
+
+uint32_t g_main_menu = 0;  // the main menu page while it takes input, until the frame's end takes it
 
 struct Rect {
     int x;
@@ -320,6 +326,25 @@ X86_FUNC(sub_00095A80) {
     uint32_t record = R32(ctx.esp + 4);
     uint32_t page = R32(ctx.esp + 8);
     bool input = G<uint8_t>(ctx.esp + 12) != 0;
-    if (input && page == R32(record + kRecordPage)) Point(ctx, record, page);
+    bool current = page == R32(record + kRecordPage);
+    if (current && R32(page + kId) == kMainMenuId) g_main_menu = page;
+    if (input && current) Point(ctx, record, page);
     __imp__sub_00095A80(ctx, base);
+}
+
+game::LegendRow game::TakeMainMenuLegend() {
+    uint32_t page = g_main_menu;
+    g_main_menu = 0;
+    if (!page) return {};
+    int n = 0;
+    for (uint32_t w = FirstWidget(page); w && n < kMaxWidgets; w = R32(w), n++) {
+        if (TypeOf(w) != kText || R32(w + kId) != kLegendId) continue;
+        Rect p = RectOf(page);
+        Rect r = RectOf(w);
+        return {true, float(p.x), ViewTop() + float(p.y + r.y), float(r.h)};
+    }
+    static bool logged = false;
+    if (!logged) LOGR("watermark: no button legend on the main menu page %08X", page);
+    logged = true;
+    return {};
 }
