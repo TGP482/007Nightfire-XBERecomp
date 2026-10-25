@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <chrono>
 #include <mutex>
 #include <unordered_map>
 
@@ -64,6 +65,9 @@ constexpr uint32_t kFmv43 = 1;
 // a menu page's background film (page +0xC4) loops (0x93115); the menus stay 4:3, so it does too
 constexpr uint32_t kFilmLoops = 8;  // 0xDCCD0's second argument, from the stack pointer
 constexpr uint32_t kReplayFilm = 0x4E504C59;  // 0xDCCD0's "NPLY": the film playing again
+// byte: 0xE8CF0 decodes no picture on the call after one that decoded, the console's next 60 Hz frame
+constexpr uint32_t kFilmSkipDecode = 0x2FF761;
+constexpr std::chrono::duration<double> kConsoleFrame{1.0 / 60};
 constexpr uint32_t kSprite = 0xE6790;
 constexpr float kFrameWidth = 640;
 constexpr float kFrameHeight = 480;
@@ -192,9 +196,15 @@ X86_FUNC(sub_000DCCD0) {
 // the film player's frame
 X86_EXTERN_FUNC(__imp__sub_000E8CF0);
 X86_FUNC(sub_000E8CF0) {
+    using Clock = std::chrono::steady_clock;
+    static Clock::time_point decoded;
+    // the skip lasts that frame's time only, so a capped frame rate still shows every picture
+    uint8_t& skip = kernel::G<uint8_t>(kFilmSkipDecode);
+    if (skip && Clock::now() - decoded >= kConsoleFrame) skip = 0;
     g_film = true;
     __imp__sub_000E8CF0(ctx, base);
     g_film = false;
+    if (skip) decoded = Clock::now();
 }
 
 X86_EXTERN_FUNC(__imp__sub_000B6AA0);
