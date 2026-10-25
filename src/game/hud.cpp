@@ -22,6 +22,9 @@ constexpr uint32_t kViewCount = 11;
 constexpr uint32_t kPlayers = 4;
 constexpr uint32_t kHudView = 5;   // the view id the HUD panels' items carry
 constexpr uint32_t kMenuView = 7;  // the menus' items, built by 0x72D10
+constexpr uint32_t kLoadingView = 10;  // the loading screen's picture and hint (0xBF9F0)
+// byte: a level is loading, 0xBFA60 to 0xDFF90; the frames between file reads (0xDC8A0) draw its dots by themselves
+constexpr uint32_t kLoading = 0x2ADF50;
 // view: its rectangle on the frame, floats
 constexpr uint32_t kViewLeft = 0xDC;
 constexpr uint32_t kViewRight = 0xE0;
@@ -150,12 +153,17 @@ void DrawSideBars(X86Context& ctx, float width) {
     g_side_bars = false;
 }
 
-void NarrowToMiddle(X86Context& ctx) {
+// a sprite into the 4:3 middle of the frame
+void Narrow(X86Context& ctx) {
     float& x = kernel::G<float>(ctx.esp + kSpriteX);
     float& w = kernel::G<float>(ctx.esp + kSpriteW);
     x = kFrameMiddleX + (x - kFrameMiddleX) * kNarrow;
     w *= kNarrow;
-    DrawSideBars(ctx, (kFrameWidth - w) / 2);
+}
+
+void NarrowToMiddle(X86Context& ctx) {
+    Narrow(ctx);
+    DrawSideBars(ctx, (kFrameWidth - kernel::G<float>(ctx.esp + kSpriteW)) / 2);
 }
 
 // The film is one 640x480 sprite, which the 16:9 frame would stretch: FILL widens its height with it, so the film
@@ -173,9 +181,11 @@ void PlaceFilm(X86Context& ctx) {
     NarrowToMiddle(ctx);
 }
 
-// a textured sprite over the whole frame in the menus' view (the title screen's picture)
-bool MenuBackground(X86Context& ctx) {
-    if (!g_view || g_view != kernel::R32(kViews + kMenuView * 4)) return false;
+// a textured sprite over the whole frame in the menus' view (the title screen's picture) or the loading screen's
+bool Background(X86Context& ctx) {
+    bool menu = g_view == kernel::R32(kViews + kMenuView * 4);
+    bool loading = g_view == kernel::R32(kViews + kLoadingView * 4);
+    if (!g_view || !(menu || loading)) return false;
     float x = kernel::G<float>(ctx.esp + kSpriteX);
     float y = kernel::G<float>(ctx.esp + kSpriteY);
     float w = kernel::G<float>(ctx.esp + kSpriteW);
@@ -248,7 +258,7 @@ X86_FUNC(sub_000D9410) {
         kernel::Return(ctx, 0, 0);
         return;
     }
-    bool narrowed = index < kPlayers || index == kHudView || index == kMenuView;
+    bool narrowed = index < kPlayers || index == kHudView || index == kMenuView || index == kLoadingView;
     uint32_t first = args[kArgFirst];
     uint32_t end = args[kArgEnd];
     if (!narrowed || !app::Widescreen() || first >= end) return __imp__sub_000D9410(ctx, base);
@@ -285,9 +295,13 @@ X86_EXTERN_FUNC(__imp__sub_000E6790);
 X86_FUNC(sub_000E6790) {
     if (g_side_bars) return __imp__sub_000E6790(ctx, base);
     if (g_film) PlaceFilm(ctx);
-    // the menus stay 4:3, so their full screen picture does too
-    if (!g_film && app::Widescreen() && MenuBackground(ctx)) {
+    // the menus and the loading screen stay 4:3, so their full screen picture does too
+    if (!g_film && app::Widescreen() && Background(ctx)) {
         NarrowToMiddle(ctx);
+        return __imp__sub_000E6790(ctx, base);
+    }
+    if (!g_film && !g_view && app::Widescreen() && kernel::G<uint8_t>(kLoading)) {
+        Narrow(ctx);
         return __imp__sub_000E6790(ctx, base);
     }
     if (!g_view) return __imp__sub_000E6790(ctx, base);
