@@ -288,6 +288,13 @@ std::string StepMaxFps(Settings& s, int step) {
     return cap ? std::to_string(cap) : "UNLIMITED";
 }
 
+constexpr uint32_t kFmvScales[] = {0, 1};
+const char* const kFmvScaleNames[] = {"FILL", "4:3"};
+
+std::string StepFmvScale(Settings&, int step) {
+    return kFmvScaleNames[StepTable(kFmvScales, game::Opt().fmv_scale, step)];
+}
+
 std::string StepFpsCounter(Settings&, int step) {
     bool& on = game::Opt().fps_counter;
     if (step) on = !on;
@@ -434,6 +441,7 @@ enum RowId {
     kPadInvertXRow,
     kFovRow,
     kViewmodelFovRow,
+    kFmvScaleRow,
 };
 
 // in RowId order
@@ -465,6 +473,7 @@ constexpr StepFn kSteps[] = {
     StepToggle<&game::Options::invert_pad_x>,
     StepFov<&game::Options::fov>,
     StepFov<&game::Options::viewmodel_fov>,
+    StepFmvScale,
 };
 
 bool Held(int id) { return id == kMonitorRow || id == kDisplayModeRow || id == kResolutionRow; }
@@ -483,6 +492,7 @@ constexpr Row kSettingsRows[] = {
     {Kind::Value, kVsyncRow, "VERTICAL SYNC"},
     {Kind::Value, kMaxFpsRow, "MAX FRAME RATE"},
     {Kind::Value, kFpsCounterRow, "FPS COUNTER"},
+    {Kind::Value, kFmvScaleRow, "FMV SCALE"},
     {Kind::Heading, -1, "GRAPHICS"},
     {Kind::Value, kAnisoRow, "ANISOTROPIC FILTERING"},
     {Kind::Heading, -1, "GENERAL"},
@@ -606,6 +616,7 @@ void RestoreDefaults(int page) {
     game::Opt().fov = game::Options{}.fov;
     game::Opt().viewmodel_fov = game::Options{}.viewmodel_fov;
     game::Opt().fps_counter = game::Options{}.fps_counter;
+    game::Opt().fmv_scale = game::Options{}.fmv_scale;
     game::Opt().pause_on_focus_loss = game::Options{}.pause_on_focus_loss;
     game::Opt().monitor = game::Options{}.monitor;
     game::Opt().players = game::Options{}.players;

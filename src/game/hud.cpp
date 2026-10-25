@@ -1,4 +1,6 @@
 #include <algorithm>
+#include <array>
+#include <bit>
 #include <mutex>
 #include <unordered_map>
 
@@ -47,11 +49,20 @@ constexpr uint32_t kRecordW = 0x18;
 
 // sprite queue, cdecl (x, y, w, h, u, v, uw, vh, colour): frame pixels
 constexpr uint32_t kSpriteX = 4;
+constexpr uint32_t kSpriteY = 8;
 constexpr uint32_t kSpriteW = 0xC;
+constexpr uint32_t kSpriteH = 0x10;
 constexpr uint32_t kSpriteU = 0x14;
 constexpr uint32_t kSpriteUw = 0x1C;
 
 constexpr float kNarrow = 0.75f;  // 4:3 of a 16:9 frame
+constexpr float kFrameMiddleX = 320;
+constexpr float kFrameMiddleY = 240;
+constexpr uint32_t kFmvFill = 0;
+constexpr uint32_t kSprite = 0xE6790;
+constexpr float kFrameWidth = 640;
+constexpr float kFrameHeight = 480;
+constexpr uint32_t kBlack = 0xFF000000;  // the film's 0xFF808080 is full colour
 constexpr float kSlack = 0.5f;
 constexpr float kLeft = 0;
 constexpr float kCenter = 0.5f;
@@ -73,6 +84,7 @@ constexpr Panel kPanels[] = {{0x17FDE8, kLeft},   // health ring
                              {0x1806D8, kAuto}};  // multiplayer radar
 
 uint32_t g_view = 0;  // while its 2D layer draws
+bool g_film = false;  // the film player's frame draws
 float g_anchor = kCenter;
 std::mutex g_lock;
 std::unordered_map<uint32_t, float> g_anchors;  // 2D item -> its panel's anchor
@@ -115,7 +127,45 @@ void Place(float& x, float& w, float anchor, float left, float right) {
     w = x2 - x1;
 }
 
+// the sides beside a 4:3 film, where older frames would show: the film's texture times black, as sprites so they
+// keep their place among its draws
+void DrawFilmBars(X86Context& ctx, float width) {
+    g_film = false;
+    for (float left : {0.0f, kFrameWidth - width}) {
+        std::array<uint32_t, 9> args = {std::bit_cast<uint32_t>(left), 0, std::bit_cast<uint32_t>(width),
+                                        std::bit_cast<uint32_t>(kFrameHeight), 0, 0, 0, 0, kBlack};
+        kernel::CallGuest(ctx, kSprite, args.data(), args.size());
+    }
+    g_film = true;
+}
+
+// The film is one 640x480 sprite, which the 16:9 frame would stretch: FILL widens its height with it, so the film
+// keeps its shape and fills the screen (the letterbox bars go past the edges); 4:3 narrows it into the middle.
+void PlaceFilm(X86Context& ctx) {
+    if (!app::Widescreen()) return;
+    float& x = kernel::G<float>(ctx.esp + kSpriteX);
+    float& y = kernel::G<float>(ctx.esp + kSpriteY);
+    float& w = kernel::G<float>(ctx.esp + kSpriteW);
+    float& h = kernel::G<float>(ctx.esp + kSpriteH);
+    if (game::Opt().fmv_scale == kFmvFill) {
+        y = kFrameMiddleY + (y - kFrameMiddleY) / kNarrow;
+        h /= kNarrow;
+        return;
+    }
+    x = kFrameMiddleX + (x - kFrameMiddleX) * kNarrow;
+    w *= kNarrow;
+    DrawFilmBars(ctx, (kFrameWidth - w) / 2);
+}
+
 }  // namespace
+
+// the film player's frame
+X86_EXTERN_FUNC(__imp__sub_000E8CF0);
+X86_FUNC(sub_000E8CF0) {
+    g_film = true;
+    __imp__sub_000E8CF0(ctx, base);
+    g_film = false;
+}
 
 X86_EXTERN_FUNC(__imp__sub_000B6AA0);
 X86_FUNC(sub_000B6AA0) {
@@ -192,6 +242,7 @@ X86_FUNC(sub_000DE3D0) {
 
 X86_EXTERN_FUNC(__imp__sub_000E6790);
 X86_FUNC(sub_000E6790) {
+    if (g_film) PlaceFilm(ctx);
     if (!g_view) return __imp__sub_000E6790(ctx, base);
     float left = kernel::G<float>(g_view + kViewLeft);
     float right = kernel::G<float>(g_view + kViewRight);

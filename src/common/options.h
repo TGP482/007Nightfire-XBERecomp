@@ -21,6 +21,7 @@ struct Options {
     uint32_t fov = kGameFov;  // first person play, horizontal degrees on a 4:3 frame
     uint32_t viewmodel_fov = kGameFov;  // the gun and arms
     bool fps_counter = false;
+    uint32_t fmv_scale = 0;  // the full screen films on a wider screen: 0 fill it, 1 in a 4:3 frame
     bool pause_on_focus_loss = true;  // the game and its sound stop while the window is in the background
     float mouse_sensitivity = 1.0f;  // horizontal
     float mouse_vertical_sensitivity = 1.0f;
