@@ -299,6 +299,13 @@ std::string StepMaxFps(Settings& s, int step) {
     return cap ? std::to_string(cap) : "UNLIMITED";
 }
 
+constexpr uint32_t kColourBlindModes[] = {0, 1, 2, 3};
+const char* const kColourBlindNames[] = {"OFF", "PROTANOPIA", "DEUTERANOPIA", "TRITANOPIA"};
+
+std::string StepColourBlind(Settings&, int step) {
+    return kColourBlindNames[StepTable(kColourBlindModes, game::Opt().colour_blind, step)];
+}
+
 constexpr uint32_t kFmvScales[] = {0, 1};
 const char* const kFmvScaleNames[] = {"FILL", "4:3"};
 
@@ -463,6 +470,7 @@ enum RowId {
     kSmaaRow,
     kAoRow,
     kHdrOutputRow,
+    kColourBlindRow,
 };
 
 // in RowId order
@@ -499,6 +507,7 @@ constexpr StepFn kSteps[] = {
     StepToggle<&game::Options::smaa>,
     StepAo,
     StepHdrOutput,
+    StepColourBlind,
 };
 
 bool Held(int id) { return id == kMonitorRow || id == kDisplayModeRow || id == kResolutionRow; }
@@ -519,6 +528,7 @@ constexpr Row kSettingsRows[] = {
     {Kind::Value, kMaxFpsRow, "MAX FRAME RATE"},
     {Kind::Value, kFpsCounterRow, "FPS COUNTER"},
     {Kind::Value, kFmvScaleRow, "FMV SCALE"},
+    {Kind::Value, kColourBlindRow, "COLOUR BLIND MODE"},
     {Kind::Heading, -1, "GRAPHICS"},
     {Kind::Value, kAoRow, "AMBIENT OCCLUSION"},
     {Kind::Value, kMsaaRow, "MSAA"},
@@ -647,6 +657,7 @@ void RestoreDefaults(int page) {
     game::Opt().fps_counter = game::Options{}.fps_counter;
     game::Opt().fmv_scale = game::Options{}.fmv_scale;
     game::Opt().hdr_output = game::Options{}.hdr_output;
+    game::Opt().colour_blind = game::Options{}.colour_blind;
     game::Opt().msaa = game::Options{}.msaa;
     game::Opt().smaa = game::Options{}.smaa;
     game::Opt().ambient_occlusion = game::Options{}.ambient_occlusion;
