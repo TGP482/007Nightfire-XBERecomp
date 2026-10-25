@@ -286,6 +286,13 @@ std::string StepVsync(Settings& s, int step) {
     return OnOff(s.vsync);
 }
 
+std::string StepHdrOutput(Settings&, int step) {
+    if (!game::g_hdr_display) return "NOT SUPPORTED";
+    bool& on = game::Opt().hdr_output;
+    if (step) on = !on;
+    return OnOff(on);
+}
+
 std::string StepMaxFps(Settings& s, int step) {
     uint32_t cap = kFpsCaps[StepTable(kFpsCaps, s.fps_cap, step)];
     if (cap == kFpsCapRefresh) return "REFRESH RATE";
@@ -455,6 +462,7 @@ enum RowId {
     kMsaaRow,
     kSmaaRow,
     kAoRow,
+    kHdrOutputRow,
 };
 
 // in RowId order
@@ -490,6 +498,7 @@ constexpr StepFn kSteps[] = {
     StepMsaa,
     StepToggle<&game::Options::smaa>,
     StepAo,
+    StepHdrOutput,
 };
 
 bool Held(int id) { return id == kMonitorRow || id == kDisplayModeRow || id == kResolutionRow; }
@@ -506,6 +515,7 @@ constexpr Row kSettingsRows[] = {
     {Kind::Value, kFovRow, "FIELD OF VIEW"},
     {Kind::Value, kViewmodelFovRow, "VIEWMODEL FIELD OF VIEW"},
     {Kind::Value, kVsyncRow, "VERTICAL SYNC"},
+    {Kind::Value, kHdrOutputRow, "HDR OUTPUT"},
     {Kind::Value, kMaxFpsRow, "MAX FRAME RATE"},
     {Kind::Value, kFpsCounterRow, "FPS COUNTER"},
     {Kind::Value, kFmvScaleRow, "FMV SCALE"},
@@ -636,6 +646,7 @@ void RestoreDefaults(int page) {
     game::Opt().viewmodel_fov = game::Options{}.viewmodel_fov;
     game::Opt().fps_counter = game::Options{}.fps_counter;
     game::Opt().fmv_scale = game::Options{}.fmv_scale;
+    game::Opt().hdr_output = game::Options{}.hdr_output;
     game::Opt().msaa = game::Options{}.msaa;
     game::Opt().smaa = game::Options{}.smaa;
     game::Opt().ambient_occlusion = game::Options{}.ambient_occlusion;

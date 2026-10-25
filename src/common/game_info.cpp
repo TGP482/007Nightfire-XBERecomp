@@ -267,6 +267,7 @@ const app::GameInfo app::kGame = {
                 {"fov", nullptr, &game::Opt().fov},
                 {"viewmodel_fov", nullptr, &game::Opt().viewmodel_fov},
                 {"fmv_scale", nullptr, &game::Opt().fmv_scale},
+                {"hdr_output", &game::Opt().hdr_output, nullptr},
                 {"msaa", nullptr, &game::Opt().msaa},
                 {"smaa", &game::Opt().smaa, nullptr},
                 {"ambient_occlusion", nullptr, &game::Opt().ambient_occlusion}},  // game settings kept in the settings file

@@ -24,6 +24,7 @@ struct Options {
     uint32_t msaa = 0;  // samples a pixel of the screen, 0 off
     bool smaa = false;  // over the finished frame, HUD included; combines with msaa
     uint32_t ambient_occlusion = 0;  // from the scene's depth: 0 off, 1 SSAO, 2 GTAO
+    bool hdr_output = true;  // HDR10 on a display with Windows HDR on
     uint32_t fmv_scale = 0;  // the full screen films on a wider screen: 0 fill it, 1 in a 4:3 frame
     bool pause_on_focus_loss = true;  // the game and its sound stop while the window is in the background
     float mouse_sensitivity = 1.0f;  // horizontal
@@ -47,6 +48,7 @@ Options& Opt();
 bool ControllerPlugged(int slot);  // game_info.cpp
 int KeyboardPort();  // game_info.cpp: the port with the keyboard, -1 for none
 inline std::atomic<float> g_fps{0};  // from the host, for the game's own counter
+inline std::atomic<bool> g_hdr_display{false};  // the renderer's: the window's display has Windows HDR on
 inline std::atomic<bool> g_hud_hidden{false};  // the toggle HUD key's, not saved
 void WaitWhileUnfocused();  // focus_pause.cpp: game thread, before the present
 uint64_t GuestTicks();  // focus_pause.cpp: rdtsc ticks less the focus pauses, held while one lasts
