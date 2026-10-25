@@ -88,6 +88,8 @@ constexpr std::pair<ImGuiCol, ImVec4> kPanelColors[] = {
     {ImGuiCol_NavHighlight, kHeading},
 };
 
+constexpr uint32_t kMsaaValues[] = {0, 2, 4, 8};
+const char* const kMsaaNames[] = {"OFF", "2x", "4x", "8x"};
 constexpr uint32_t kAnisoValues[] = {0, 2, 4, 8, 16};
 const char* const kAnisoNames[] = {"GAME DEFAULT", "2x", "4x", "8x", "16x"};
 constexpr uint32_t kFpsCaps[] = {30, 60, 75, 90, 120, 144, 165, 240, 360, kFpsCapRefresh, 0};
@@ -301,6 +303,8 @@ std::string StepFpsCounter(Settings&, int step) {
     return OnOff(on);
 }
 
+std::string StepMsaa(Settings&, int step) { return kMsaaNames[StepTable(kMsaaValues, game::Opt().msaa, step)]; }
+
 std::string StepAniso(Settings& s, int step) { return kAnisoNames[StepTable(kAnisoValues, s.aniso, step)]; }
 
 std::string StepSkipIntros(Settings&, int step) {
@@ -442,6 +446,8 @@ enum RowId {
     kFovRow,
     kViewmodelFovRow,
     kFmvScaleRow,
+    kMsaaRow,
+    kSmaaRow,
 };
 
 // in RowId order
@@ -474,6 +480,8 @@ constexpr StepFn kSteps[] = {
     StepFov<&game::Options::fov>,
     StepFov<&game::Options::viewmodel_fov>,
     StepFmvScale,
+    StepMsaa,
+    StepToggle<&game::Options::smaa>,
 };
 
 bool Held(int id) { return id == kMonitorRow || id == kDisplayModeRow || id == kResolutionRow; }
@@ -494,6 +502,8 @@ constexpr Row kSettingsRows[] = {
     {Kind::Value, kFpsCounterRow, "FPS COUNTER"},
     {Kind::Value, kFmvScaleRow, "FMV SCALE"},
     {Kind::Heading, -1, "GRAPHICS"},
+    {Kind::Value, kMsaaRow, "MSAA"},
+    {Kind::Value, kSmaaRow, "SMAA"},
     {Kind::Value, kAnisoRow, "ANISOTROPIC FILTERING"},
     {Kind::Heading, -1, "GENERAL"},
     {Kind::Value, kSkipIntrosRow, "SKIP INTROS"},
@@ -617,6 +627,8 @@ void RestoreDefaults(int page) {
     game::Opt().viewmodel_fov = game::Options{}.viewmodel_fov;
     game::Opt().fps_counter = game::Options{}.fps_counter;
     game::Opt().fmv_scale = game::Options{}.fmv_scale;
+    game::Opt().msaa = game::Options{}.msaa;
+    game::Opt().smaa = game::Options{}.smaa;
     game::Opt().pause_on_focus_loss = game::Options{}.pause_on_focus_loss;
     game::Opt().monitor = game::Options{}.monitor;
     game::Opt().players = game::Options{}.players;
