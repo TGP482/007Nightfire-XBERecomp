@@ -263,7 +263,9 @@ const app::GameInfo app::kGame = {
                 {"pause_on_focus_loss", &game::Opt().pause_on_focus_loss, nullptr},
                 {"invert_mouse", &game::Opt().invert_mouse, nullptr},
                 {"invert_mouse_x", &game::Opt().invert_mouse_x, nullptr},
-                {"invert_pad_x", &game::Opt().invert_pad_x, nullptr}},  // game settings kept in the settings file
+                {"invert_pad_x", &game::Opt().invert_pad_x, nullptr},
+                {"fov", nullptr, &game::Opt().fov},
+                {"viewmodel_fov", nullptr, &game::Opt().viewmodel_fov}},  // game settings kept in the settings file
     .load = game::Load,                     // reads more from the settings file's toml::table
     .save = game::Save,                     // writes more into it
     .init = input::LoadBindings,            // after the settings load, before the window and boot

@@ -326,6 +326,21 @@ std::string StepSensitivity(Settings&, int step) {
     return SensitivityText(tenths);
 }
 
+constexpr int kFovMin = 45;
+constexpr int kFovMax = 140;
+constexpr int kFovSlots = kFovMax - kFovMin + 1;
+
+template <uint32_t game::Options::*Value>
+std::string StepFov(Settings&, int step) {
+    uint32_t& fov = game::Opt().*Value;
+    if (step) {
+        int slot = std::clamp(int(fov), kFovMin, kFovMax) - kFovMin;
+        fov = uint32_t(kFovMin + StepIndex(slot, step, kFovSlots));
+    }
+    std::string text = std::to_string(fov);
+    return fov == game::kGameFov ? text + " (DEFAULT)" : text;
+}
+
 template <bool game::Options::*Value>
 std::string StepToggle(Settings&, int step) {
     bool& on = game::Opt().*Value;
@@ -417,6 +432,8 @@ enum RowId {
     kPadAimHorizontalRow,
     kPadAimVerticalRow,
     kPadInvertXRow,
+    kFovRow,
+    kViewmodelFovRow,
 };
 
 // in RowId order
@@ -446,6 +463,8 @@ constexpr StepFn kSteps[] = {
     StepSensitivity<&game::Options::pad_aim_horizontal_sensitivity>,
     StepSensitivity<&game::Options::pad_aim_vertical_sensitivity>,
     StepToggle<&game::Options::invert_pad_x>,
+    StepFov<&game::Options::fov>,
+    StepFov<&game::Options::viewmodel_fov>,
 };
 
 bool Held(int id) { return id == kMonitorRow || id == kDisplayModeRow || id == kResolutionRow; }
@@ -459,6 +478,8 @@ constexpr Row kSettingsRows[] = {
     {Kind::Value, kDisplayModeRow, "DISPLAY MODE"},
     {Kind::Value, kResolutionRow, "RESOLUTION"},
     {Kind::Value, kRenderResolutionRow, "RENDER RESOLUTION"},
+    {Kind::Value, kFovRow, "FIELD OF VIEW"},
+    {Kind::Value, kViewmodelFovRow, "VIEWMODEL FIELD OF VIEW"},
     {Kind::Value, kVsyncRow, "VERTICAL SYNC"},
     {Kind::Value, kMaxFpsRow, "MAX FRAME RATE"},
     {Kind::Value, kFpsCounterRow, "FPS COUNTER"},
@@ -582,6 +603,8 @@ void RestoreDefaults(int page) {
     s = Settings{};
     s.join_ip = join_ip;
     game::Opt().skip_intros = game::Options{}.skip_intros;
+    game::Opt().fov = game::Options{}.fov;
+    game::Opt().viewmodel_fov = game::Options{}.viewmodel_fov;
     game::Opt().fps_counter = game::Options{}.fps_counter;
     game::Opt().pause_on_focus_loss = game::Options{}.pause_on_focus_loss;
     game::Opt().monitor = game::Options{}.monitor;

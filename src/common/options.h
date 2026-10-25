@@ -14,9 +14,12 @@ struct PlayerPort {
     int pad = -1;  // controller slot 0 to 3, -1 for none
 };
 inline constexpr int kPlayers = 4;  // the console's controller ports
+inline constexpr uint32_t kGameFov = 75;  // the game's 60 degrees vertical as horizontal degrees on a 4:3 frame
 
 struct Options {
     bool skip_intros = false;  // the EA GAMES and MGM INTERACTIVE logos at boot
+    uint32_t fov = kGameFov;  // first person play, horizontal degrees on a 4:3 frame
+    uint32_t viewmodel_fov = kGameFov;  // the gun and arms
     bool fps_counter = false;
     bool pause_on_focus_loss = true;  // the game and its sound stop while the window is in the background
     float mouse_sensitivity = 1.0f;  // horizontal
