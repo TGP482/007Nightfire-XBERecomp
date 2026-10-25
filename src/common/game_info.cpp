@@ -115,6 +115,26 @@ void RawRumble(int slot, uint16_t left, uint16_t right) {
 // not plain negation: -32768 has no positive
 int16_t Flip(int16_t v) { return int16_t(-1 - v); }
 
+// The game drops a stick axis inside 30 of its 100 (0xE76DD): the axis is moved so that zone starts where the chosen
+// one does, the identity at the game's own
+int16_t MoveDeadZone(int16_t value, float zone) {
+    constexpr float kStickMax = 32767.0f;
+    float v = std::min(std::abs(float(value)) / kStickMax, 1.0f);
+    if (v <= zone) return 0;
+    float out = (kGameDeadZone + (v - zone) / (1.0f - zone) * (1.0f - kGameDeadZone)) * kStickMax;
+    return int16_t(std::lround(value < 0 ? -out : out));
+}
+
+void ApplyDeadZone(input::Pad& pad) {
+    float zone = Opt().pad_dead_zone;
+    if (zone <= 0.0f || zone == kGameDeadZone) return;
+    for (int16_t* axis : {&pad.lx, &pad.ly, &pad.rx, &pad.ry}) *axis = MoveDeadZone(*axis, zone);
+}
+
+uint16_t ScaleMotor(uint16_t speed) {
+    return uint16_t(std::min<uint32_t>(speed * Opt().vibration_strength / 100, 0xFFFF));
+}
+
 void InvertLook(input::Pad& pad) {
     if (Opt().invert_pad_x) pad.rx = Flip(pad.rx);
 }
@@ -135,6 +155,7 @@ void Pad(int port, input::Pad& pad) {
     if (g_raw || port < 0 || port >= kPlayers) return;
     PlayerPort player = Opt().players[size_t(port)];
     pad = SlotPad(port, player.pad, pad);
+    ApplyDeadZone(pad);
     InvertLook(pad);
     if (player.keyboard) input::SeenPad(pad);
     if (player.keyboard) pad.connected = true;
@@ -151,6 +172,8 @@ void Rumble(int port, uint16_t& left, uint16_t& right) {
         left = 0;
         right = 0;
     }
+    left = ScaleMotor(left);
+    right = ScaleMotor(right);
     if (player.pad >= 0) g_motors[size_t(player.pad)] = uint32_t(left) << 16 | right;
     if (player.pad >= 0 && player.pad != port) RawRumble(player.pad, left, right);
     uint32_t motors = SlotOwned(port) ? g_motors[size_t(port)].load() : 0;
@@ -215,6 +238,9 @@ void Load(const void* table) {
     // files from before the split have the one sensitivity
     if (!t["mouse_vertical_sensitivity"]) o.mouse_vertical_sensitivity = o.mouse_sensitivity;
     o.gyro.sensitivity = float(t["gyro_sensitivity"].value_or(double(o.gyro.sensitivity)));
+    float zone = float(t["pad_dead_zone"].value_or(double(o.pad_dead_zone)));
+    o.pad_dead_zone = zone > 0.0f ? std::clamp(zone, kMinDeadZone, 1.0f) : 0.0f;
+    o.vibration_strength = std::clamp(o.vibration_strength, kMinVibration, kMaxVibration);
     o.monitor = t["monitor"].value_or(o.monitor);
     if (const toml::table* keys = t["keys"].as_table())
         for (auto&& [id, value] : *keys)
@@ -227,6 +253,7 @@ void Save(void* table) {
     toml::table& t = *static_cast<toml::table*>(table);
     for (const FloatOption& f : kFloats) t.insert(f.key, double(Opt().*f.value));
     t.insert("gyro_sensitivity", double(Opt().gyro.sensitivity));
+    t.insert("pad_dead_zone", double(Opt().pad_dead_zone));
     t.insert("monitor", Opt().monitor);
     toml::table keys;
     for (const auto& [id, value] : Opt().keys) keys.insert(id, value);
@@ -274,6 +301,7 @@ const app::GameInfo app::kGame = {
                 {"hdr_output", &game::Opt().hdr_output, nullptr},
                 {"colour_blind", nullptr, &game::Opt().colour_blind},
                 {"audio_output", nullptr, &game::Opt().audio_output},
+                {"vibration_strength", nullptr, &game::Opt().vibration_strength},
                 {"gyro_aiming", &game::Opt().gyro.enabled, nullptr},
                 {"gyro_axis", nullptr, &game::Opt().gyro.axis},
                 {"gyro_button", nullptr, &game::Opt().gyro.button},

@@ -3,6 +3,7 @@
 #include <cmath>
 #include <thread>
 
+#include "common/game_options.h"
 #include "xdk/hle.h"
 
 // The game steps a fixed 1/60 s each frame (1/50 on PAL): its main loop passes that rate to 0x6B040, which sets the
@@ -41,4 +42,5 @@ X86_FUNC(sub_0006B040) {
     kernel::W32(ctx.esp + kRate, whole);
     kernel::W32(ctx.esp + kRate2, whole);
     __imp__sub_0006B040(ctx, base);
+    game::SaveChangedOptions(ctx);
 }

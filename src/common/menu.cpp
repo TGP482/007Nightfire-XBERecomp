@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <map>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -23,10 +24,12 @@
 
 #include "app/app.h"
 #include "audio/output.h"
+#include "common/game_options.h"
 #include "common/menu.h"
 #include "common/monitor.h"
 #include "common/mouse_keyboard.h"
 #include "common/options.h"
+#include "kernel/kernel.h"
 
 namespace app {
 
@@ -373,6 +376,33 @@ std::string StepSensitivity(Settings&, int step) {
     return StepTenths(game::Opt().*Value, step);
 }
 
+// 0.1 to 1.0 in tenths, the game's own shown until one is picked
+std::string StepDeadZone(Settings&, int step) {
+    float& zone = game::Opt().pad_dead_zone;
+    float shown = zone > 0.0f ? zone : game::kGameDeadZone;
+    if (step) {
+        int slot = std::clamp(int(std::lround(shown * kTenthsPerUnit)), 1, kTenthsPerUnit) - 1;
+        zone = float(StepIndex(slot, step, kTenthsPerUnit) + 1) / kTenthsPerUnit;
+    }
+    char text[24];
+    if (zone == 0.0f) std::snprintf(text, sizeof(text), "%.1f (DEFAULT)", game::kGameDeadZone);
+    else std::snprintf(text, sizeof(text), "%.1f", zone);
+    return text;
+}
+
+// 10% to 200% in steps of 10
+std::string StepVibration(Settings&, int step) {
+    constexpr uint32_t kStep = 10;
+    constexpr int kSlots = int(game::kMaxVibration / kStep);
+    uint32_t& strength = game::Opt().vibration_strength;
+    if (step) {
+        int slot = std::clamp(int(strength / kStep), 1, kSlots) - 1;
+        strength = uint32_t(StepIndex(slot, step, kSlots) + 1) * kStep;
+    }
+    if (strength == game::Options{}.vibration_strength) return "100% (DEFAULT)";
+    return std::to_string(strength) + "%";
+}
+
 std::string StepGyroSensitivity(Settings&, int step) { return StepTenths(game::Opt().gyro.sensitivity, step); }
 
 // one of names, stepped first
@@ -522,6 +552,8 @@ enum RowId {
     kHdrOutputRow,
     kColourBlindRow,
     kAudioOutputRow,
+    kDeadZoneRow,
+    kVibrationRow,
     kGyroAimingRow,
     kGyroSensitivityRow,
     kGyroAxisRow,
@@ -567,6 +599,8 @@ constexpr StepFn kSteps[] = {
     StepHdrOutput,
     StepColourBlind,
     StepAudioOutput,
+    StepDeadZone,
+    StepVibration,
     StepGyroAiming,
     StepGyroSensitivity,
     StepGyroAxis,
@@ -577,6 +611,34 @@ constexpr StepFn kSteps[] = {
 };
 
 bool Held(int id) { return id == kMonitorRow || id == kDisplayModeRow || id == kResolutionRow; }
+
+// The game's own options follow the panel's rows, one id each in the game's order
+constexpr int kFirstGameOption = int(std::size(kSteps));
+constexpr int kVolumeStep = 5;  // the game's slider has 20 steps
+constexpr int kVolumeMax = 100;
+
+std::string StepVolume(uint32_t address, int step) {
+    uint32_t& volume = kernel::G<uint32_t>(address);
+    int slot = std::clamp(int(volume), 0, kVolumeMax) / kVolumeStep;
+    if (step) volume = uint32_t(std::clamp(slot + step, 0, kVolumeMax / kVolumeStep) * kVolumeStep);
+    return std::to_string(volume) + "%";
+}
+
+std::string StepGameOption(const game::GameOption& option, int step) {
+    if (step) game::g_options_changed = true;
+    if (option.kind == game::OptionKind::Volume) return StepVolume(option.address, step);
+    uint8_t& value = kernel::G<uint8_t>(option.address);
+    if (step) value = value ? 0 : 1;
+    if (option.kind == game::OptionKind::HoldToggle) return value ? "TOGGLE" : "HOLD";
+    return OnOff(value != 0);
+}
+
+std::string StepRow(int id, Settings& s, int step) {
+    if (id < kFirstGameOption) return kSteps[id](s, step);
+    size_t count = 0;
+    const game::GameOption* options = game::GameOptions(&count);
+    return StepGameOption(options[size_t(id - kFirstGameOption)], step);
+}
 
 using rows::Kind;
 using rows::Row;
@@ -646,6 +708,8 @@ constexpr Row kPadRows[] = {
     {Kind::Value, kPadAimHorizontalRow, "AIM HORIZONTAL SENSITIVITY"},
     {Kind::Value, kPadAimVerticalRow, "AIM VERTICAL SENSITIVITY"},
     {Kind::Value, kPadInvertXRow, "INVERT X AXIS"},
+    {Kind::Value, kDeadZoneRow, "DEADZONE"},
+    {Kind::Value, kVibrationRow, "VIBRATION STRENGTH"},
     {Kind::Heading, -1, "GYRO"},
     {Kind::Value, kGyroAimingRow, "GYRO AIMING"},
     {Kind::Value, kGyroSensitivityRow, "GYRO SENSITIVITY"},
@@ -655,6 +719,54 @@ constexpr Row kPadRows[] = {
     {Kind::Value, kGyroRecenterRow, "RECENTER BUTTON"},
     {Kind::Value, kGyroCalibrateRow, "CALIBRATE GYRO"},
 };
+
+// the game's options for a section, inserted before rows[at]
+void InsertGameOptions(std::vector<Row>& rows, size_t at, game::OptionPlace place) {
+    size_t count = 0;
+    const game::GameOption* options = game::GameOptions(&count);
+    std::vector<Row> joined;
+    for (size_t i = 0; i < count; i++) {
+        if (options[i].place == place) joined.push_back({Kind::Value, kFirstGameOption + int(i), options[i].label});
+    }
+    rows.insert(rows.begin() + std::ptrdiff_t(at), joined.begin(), joined.end());
+}
+
+size_t IndexOfHeading(const std::vector<Row>& rows, std::string_view label) {
+    auto heading = [label](const Row& r) { return r.kind == Kind::Heading && r.label == label; };
+    return size_t(std::find_if(rows.begin(), rows.end(), heading) - rows.begin());
+}
+
+bool HasGameOption(game::OptionPlace place) {
+    size_t count = 0;
+    const game::GameOption* options = game::GameOptions(&count);
+    return std::any_of(options, options + count, [place](const game::GameOption& o) { return o.place == place; });
+}
+
+// GAMEPLAY between GRAPHICS and GENERAL, the volumes at the end of GENERAL
+const std::vector<Row>& SettingsRows() {
+    static const std::vector<Row> list = [] {
+        std::vector<Row> out(std::begin(kSettingsRows), std::end(kSettingsRows));
+        InsertGameOptions(out, IndexOfHeading(out, "INPUT DEVICES"), game::OptionPlace::General);
+        size_t general = IndexOfHeading(out, "GENERAL");
+        InsertGameOptions(out, general, game::OptionPlace::Gameplay);
+        if (HasGameOption(game::OptionPlace::Gameplay)) {
+            out.insert(out.begin() + std::ptrdiff_t(general), {Kind::Heading, -1, "GAMEPLAY"});
+        }
+        return out;
+    }();
+    return list;
+}
+
+// the game's vibration switch and auto aim before the deadzone
+const std::vector<Row>& PadRows() {
+    static const std::vector<Row> list = [] {
+        std::vector<Row> out(std::begin(kPadRows), std::end(kPadRows));
+        auto deadzone = std::find_if(out.begin(), out.end(), [](const Row& r) { return r.id == kDeadZoneRow; });
+        InsertGameOptions(out, size_t(deadzone - out.begin()), game::OptionPlace::Controller);
+        return out;
+    }();
+    return list;
+}
 
 bool SameDisplay(const Settings& a, const Settings& b) {
     bool same_monitor = MonitorSetting(a) == MonitorSetting(b);
@@ -669,14 +781,14 @@ void CopyDisplay(Settings& to, const Settings& from) {
 }
 
 void ApplyLiveStep(const Row& row, int step) {
-    kSteps[row.id](Get(), step);
+    StepRow(row.id, Get(), step);
     Save();
 }
 
 void ApplyHeldStep(const Row& row, int step) {
     const Settings& live = Get();
     if (!g_display_held) CopyDisplay(g_display, live);
-    kSteps[row.id](g_display, step);
+    StepRow(row.id, g_display, step);
     g_display_held = !SameDisplay(g_display, live);
 }
 
@@ -709,6 +821,8 @@ void RestorePadDefaults() {
     o.pad_aim_horizontal_sensitivity = defaults.pad_aim_horizontal_sensitivity;
     o.pad_aim_vertical_sensitivity = defaults.pad_aim_vertical_sensitivity;
     o.invert_pad_x = defaults.invert_pad_x;
+    o.pad_dead_zone = defaults.pad_dead_zone;
+    o.vibration_strength = defaults.vibration_strength;
     o.gyro = defaults.gyro;
     Save();
 }
@@ -848,7 +962,7 @@ void DrawHeading(const char* title) {
 void DrawValueRow(const Row& row) {
     bool held = Held(row.id);
     Settings& shown = held && g_display_held ? g_display : Get();
-    std::string value = kSteps[row.id](shown, 0);
+    std::string value = StepRow(row.id, shown, 0);
     int step = OptionRow(row.label, value.c_str());
     if (step == 0) return;
     if (held) {
@@ -1109,12 +1223,12 @@ void DrawPanel() {
 const rows::Row* rows::Page(int page, size_t* count) {
     *count = 0;
     if (page == 0) {
-        *count = std::size(kSettingsRows);
-        return kSettingsRows;
+        *count = SettingsRows().size();
+        return SettingsRows().data();
     }
     if (page == kPadPage) {
-        *count = std::size(kPadRows);
-        return kPadRows;
+        *count = PadRows().size();
+        return PadRows().data();
     }
     if (page != kInputPage) return nullptr;
     *count = InputRows().size();
@@ -1126,7 +1240,7 @@ std::string rows::Value(const Row& row, int step) {
     if (row.kind == Kind::Bind && g_capture.action == row.id) return "PRESS A KEY";
     if (row.kind == Kind::Bind) return KeyText(input::Binding(size_t(row.id)));
     if (row.kind != Kind::Value) return {};
-    std::string text = kSteps[row.id](Get(), step);
+    std::string text = StepRow(row.id, Get(), step);
     if (step == 0) return text;
     if (Held(row.id)) ApplyDisplay();
     Save();

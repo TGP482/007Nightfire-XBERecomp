@@ -16,6 +16,10 @@ struct PlayerPort {
     int pad = -1;  // controller slot 0 to 3, -1 for none
 };
 inline constexpr int kPlayers = 4;  // the console's controller ports
+inline constexpr float kGameDeadZone = 0.3f;  // of a stick axis, 0xE76DD
+inline constexpr float kMinDeadZone = 0.1f;
+inline constexpr uint32_t kMinVibration = 10;
+inline constexpr uint32_t kMaxVibration = 200;
 inline constexpr uint32_t kGameFov = 75;  // the game's 60 degrees vertical as horizontal degrees on a 4:3 frame
 
 struct Options {
@@ -44,6 +48,8 @@ struct Options {
     float pad_aim_horizontal_sensitivity = 1.0f;
     float pad_aim_vertical_sensitivity = 1.0f;
     bool invert_pad_x = false;  // the game's own controls have the Y axis
+    float pad_dead_zone = 0.0f;  // per stick axis, 0 the game's own
+    uint32_t vibration_strength = 100;  // percent of the game's rumble, 10 to 200; the game has its own off
     gyro::Settings gyro;  // the controller's gyro turns player 1's view, beside the right stick
     std::string monitor;  // its device name, \\.\DISPLAY2; empty the primary
     std::map<std::string, std::string> keys;  // action id to key names, absent is the default
