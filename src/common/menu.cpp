@@ -385,7 +385,7 @@ std::string StepPlayerPort(Settings&, int step) {
     return StepPlayer(Player, step);
 }
 
-// The rows. A value row's id picks its step, held rows wait for Apply.
+// The rows, shared with the pause menu. A value row's id picks its step, held rows wait for Apply.
 using StepFn = std::string (*)(Settings& s, int step);
 
 enum RowId {
@@ -429,12 +429,8 @@ constexpr StepFn kSteps[] = {
 
 bool Held(int id) { return id == kMonitorRow || id == kDisplayModeRow || id == kResolutionRow; }
 
-enum class Kind { Heading, Value, Bind };
-struct Row {
-    Kind kind;
-    int id;
-    const char* label;
-};
+using rows::Kind;
+using rows::Row;
 
 constexpr Row kSettingsRows[] = {
     {Kind::Heading, -1, "DISPLAY"},
@@ -898,6 +894,37 @@ void DrawPanel() {
 
 }  // namespace
 
+const rows::Row* rows::Page(int page, size_t* count) {
+    *count = 0;
+    if (page == 0) {
+        *count = std::size(kSettingsRows);
+        return kSettingsRows;
+    }
+    if (page != kInputPage) return nullptr;
+    *count = InputRows().size();
+    return InputRows().data();
+}
+
+// the pause menu applies a change at once, display rows too
+std::string rows::Value(const Row& row, int step) {
+    if (row.kind == Kind::Bind && g_capture.action == row.id) return "PRESS A KEY";
+    if (row.kind == Kind::Bind) return KeyText(input::Binding(size_t(row.id)));
+    if (row.kind != Kind::Value) return {};
+    std::string text = kSteps[row.id](Get(), step);
+    if (step == 0) return text;
+    if (Held(row.id)) ApplyDisplay();
+    Save();
+    return text;
+}
+
+void rows::Defaults(int page) {
+    if (page >= 0 && page < kPageCount) RestoreDefaults(page);
+}
+
+void rows::Bind(const Row& row) {
+    if (row.kind == Kind::Bind && !Capturing()) StartCapture(row.id, 0);
+}
+
 bool MenuOpen() { return g_open.load(std::memory_order_relaxed); }
 
 bool Capturing() { return g_capture.action >= 0; }
@@ -930,7 +957,7 @@ void DrawUi(double fps) {
     UpdateCursorFlag(io);
     io.KeyRepeatRate = kRepeatSeconds;
     io.FontGlobalScale = std::max(kMinFontScale, io.DisplaySize.y / kFontScaleLines);
-    PollCapture();
+    PollCapture();  // a bind started in the pause menu waits here too
     if (MenuOpen()) DrawPanel();
 }
 

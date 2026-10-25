@@ -362,7 +362,8 @@ Use PressActions(const Binds& binds, bool menu, float* values) {
 
 // the bound keys held this frame into the values, and the reload and action keys held
 Use Press(float* values, bool menu) {
-    if (!Active()) {
+    // a bind started in the pause menu takes the next key, and the key that bound waits for release
+    if (!Active() || app::Capturing()) {
         g_settle = true;
         return {};
     }

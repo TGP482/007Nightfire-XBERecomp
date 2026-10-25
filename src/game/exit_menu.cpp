@@ -18,6 +18,7 @@
 
 #include "app/app.h"
 #include "core/log.h"
+#include "game/options_menu.h"
 #include "kernel/memory.h"
 #include "xdk/hle.h"
 
@@ -178,7 +179,13 @@ X86_FUNC(sub_00092C40) {
         return;
     }
     bool stock = message == kMakeWidget && a && StockButton(R32(a + kDefId)) && BuildingMainMenu(record);
-    if (!stock) return __imp__sub_00092C40(ctx, base);
+    if (!stock) {
+        __imp__sub_00092C40(ctx, base);
+        // the pause menu's RECOMP tab is made the same way, from SCORE (options_menu.cpp)
+        if (message == kMakeWidget && a) game::LatchScoreTab(record, a, ctx.eax);
+        if (message == kFinishWidget && a) game::EnsureRecompTab(ctx, record, a);
+        return;
+    }
     uint32_t id = R32(a + kDefId);
     uint32_t lifted = Lifted(a);
     kernel::W32(ctx.esp + 12, lifted);
@@ -197,6 +204,7 @@ X86_FUNC(sub_00072630) {
     uint32_t a = R32(ctx.esp + 12);
     uint32_t b = R32(ctx.esp + 16);
     if (widget && widget == g_codenames.widget) g_codenames.sent.push_back({message, a, b});
+    game::LatchScoreMessage(widget, message, a, b);
     bool quit = message == kPressed && b == 0 && widget && a && R32(a + kId) == kQuitId &&
                 R32(a + kParent) == widget && R32(widget + kId) == kMainMenuId;
     __imp__sub_00072630(ctx, base);

@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "app/app.h"
+#include "common/menu.h"
 #include "common/mouse_keyboard.h"
 #include "core/log.h"
 #include "game/main_menu.h"
@@ -271,7 +272,8 @@ void Point(X86Context& ctx, uint32_t record, uint32_t page) {
     int y;
     bool shown = MousePoint(x, y);
     bool down = shown && input::LeftButton();
-    bool click = down && !was_down;
+    // the button that binds in a key capture clicks nothing, held past it too
+    bool click = down && !was_down && !app::Capturing();
     was_down = down;
     if (!shown) {
         last_x = INT_MIN;
