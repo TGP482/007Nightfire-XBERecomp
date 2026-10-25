@@ -337,15 +337,34 @@ struct Use {
 
 bool Moves(int value) { return value == kForward || value == kStrafe; }
 
-// a move key and a strafe key together go as fast as one, as the stick does pushed into a corner
+// default.xbe's walk (0xA9CF0): forward 0.005 + 0.1 f^2, back 0.005 + 0.075 f^2, strafe 0.075 s, each at most 0.1
+constexpr float kMoveBase = 0.005f;
+constexpr float kForwardCurve = 0.1f;
+constexpr float kBackCurve = 0.075f;
+constexpr float kStrafeRate = 0.075f;
+constexpr float kMoveMost = 0.1f;
+
+float ForwardSpeed(float forward) {
+    float curve = forward > 0 ? kForwardCurve : kBackCurve;
+    return std::min(kMoveBase + curve * forward * forward, kMoveMost);
+}
+
+// the forward amount the walk turns into this speed
+float ForwardFor(float speed, bool back) {
+    float curve = back ? kBackCurve : kForwardCurve;
+    return std::sqrt(std::max(speed - kMoveBase, 0.0f) / curve);
+}
+
+// a move key and a strafe key together go as fast as the faster of the two alone, in the direction they gave
 void LimitDiagonal(float* values) {
     float forward = values[kForward];
     float strafe = values[kStrafe];
-    float length = std::hypot(forward, strafe);
-    float most = std::max(std::abs(forward), std::abs(strafe));
-    if (length <= most) return;
-    values[kForward] = forward * most / length;
-    values[kStrafe] = strafe * most / length;
+    if (forward == 0.0f || strafe == 0.0f) return;
+    float ahead = ForwardSpeed(forward);
+    float across = std::min(std::abs(strafe) * kStrafeRate, kMoveMost);
+    float scale = std::max(ahead, across) / std::hypot(ahead, across);
+    values[kForward] = std::copysign(ForwardFor(ahead * scale, forward < 0.0f), forward);
+    values[kStrafe] = std::copysign(across * scale / kStrafeRate, strafe);
 }
 
 Use PressActions(const Binds& binds, bool menu, float* values) {
