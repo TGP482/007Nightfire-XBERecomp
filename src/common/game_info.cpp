@@ -47,6 +47,12 @@ bool PanelKeyDown(uint32_t msg, uintptr_t key, intptr_t lp, intptr_t* result) {
     return false;
 }
 
+// the arrow over the panel, the menu cursor over the game's menus, none in play
+void* MenuCursor() {
+    if (app::MenuOpen()) return LoadCursorW(nullptr, MAKEINTRESOURCEW(32512));  // IDC_ARROW
+    return input::CursorShown() ? app::CursorImage() : nullptr;
+}
+
 // F10 is a system key: the window menu it would open stalls the game window's messages
 bool SwallowKeyMenu(uintptr_t command, intptr_t* result) {
     if ((command & kSysCommandMask) != SC_KEYMENU) return false;
@@ -74,9 +80,9 @@ bool Message(void* hwnd, uint32_t msg, uintptr_t wp, intptr_t lp, intptr_t* resu
             if (LOWORD(wp) == WA_INACTIVE) input::Settle();
             return false;
         case WM_SETCURSOR:
-            // the game has no pointer of its own; the panel and the game's menus show the arrow
+            // the game has no pointer of its own; the panel shows the arrow, the game's menus the menu cursor
             if (LOWORD(lp) != HTCLIENT) return false;
-            SetCursor(app::MenuOpen() || input::CursorShown() ? LoadCursorW(nullptr, MAKEINTRESOURCEW(32512)) : nullptr);
+            SetCursor(static_cast<HCURSOR>(MenuCursor()));
             *result = TRUE;
             return true;
     }
