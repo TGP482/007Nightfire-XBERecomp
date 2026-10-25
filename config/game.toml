@@ -281,6 +281,11 @@ at = 0xADA5C
 call = "GadgetRecharge"
 on_true = 0xADB97
 
+# the mouse turns a guided missile (src/game/mouse.cpp)
+[[hook]]
+at = 0x23838
+call = "GuidedMissileMouse"
+
 # argument locations in API order for functions a link time code generated library compiled with another
 # convention: a register (eax ebx ecx edx esi edi ebp) or "stack" for the next stack slot, which the callee pops
 [abi]

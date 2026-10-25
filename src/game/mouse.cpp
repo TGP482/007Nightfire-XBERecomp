@@ -13,6 +13,7 @@ namespace {
 using kernel::G;
 
 constexpr uint32_t kPlayerState = 0xD2;  // u16; 8 to 12 and 16 have no look, 0xB7610 leaves them
+constexpr uint16_t kGuiding = 10;        // steering a guided missile, which 0x23670 turns by the sticks
 constexpr uint32_t kPlayerWeapon = 0xB8;
 constexpr uint32_t kWeaponFlags = 0x50;  // bit 0 set by the manual aim button, 0xBA8F0
 constexpr uint8_t kManualAim = 1;
@@ -35,6 +36,17 @@ constexpr float kQuarterTurnsPerRadian = 0.63661975f;
 constexpr uint32_t kAutoAim[] = {0x1FE6D1, 0x1FE6D2};
 constexpr uint32_t kPlayerSettings = 0x158;  // apart, as the players' action blocks
 
+// the guided missile (0x23670): its owner and that player's controller
+constexpr uint32_t kMissileData = 0xBC;
+constexpr uint32_t kMissileOwner = 0x24;
+// its turn this frame at 0x23838, radians: across right positive, up and down up negative
+constexpr uint32_t kMissileTurnAcross = 0x3C;
+constexpr uint32_t kMissileTurnUpDown = 0x38;
+
+// mouse counts the player's look took while steering a missile, for its turn
+float g_missile_dx = 0.0f;
+float g_missile_dy = 0.0f;
+
 bool Looks(uint16_t state) { return state < 8 || (state > 12 && state != 16); }
 
 // in manual aim or zoomed in
@@ -56,7 +68,15 @@ void ScalePadLook(uint32_t controller, bool aim, float pitch_before) {
 void MouseLook(uint32_t player, uint32_t controller, bool aim) {
     float dx;
     float dy;
-    if (!input::TakeMouse(dx, dy) || !Looks(G<uint16_t>(player + kPlayerState))) return;
+    if (!input::TakeMouse(dx, dy)) return;
+    uint16_t state = G<uint16_t>(player + kPlayerState);
+    if (state == kGuiding) {
+        g_missile_dx += dx;
+        g_missile_dy += dy;
+    }
+    if (!Looks(state)) return;
+    g_missile_dx = 0.0f;
+    g_missile_dy = 0.0f;
     if (aim) {
         dx *= game::Opt().aim_horizontal_sensitivity;
         dy *= game::Opt().aim_vertical_sensitivity;
@@ -114,4 +134,21 @@ X86_FUNC(sub_000B9950) {
     for (size_t i = 0; i < std::size(kAutoAim); i++) setting[i] = std::exchange(G<uint8_t>(kAutoAim[i] + own), 0);
     __imp__sub_000B9950(ctx, base);
     for (size_t i = 0; i < std::size(kAutoAim); i++) G<uint8_t>(kAutoAim[i] + own) = setting[i];
+}
+
+// at 0x23838 in a guided missile's flight (the missile in edi): the mouse turns it beside the sticks
+void GuidedMissileMouse(X86Context& ctx, uint8_t*) {
+    uint32_t owner = kernel::R32(kernel::R32(ctx.edi + kMissileData) + kMissileOwner);
+    uint32_t controller = kernel::R32(owner + kPlayerController);
+    if (G<int8_t>(controller + kControllerPlayer) != input::KeyboardPlayer()) return;
+    float dx;
+    float dy;
+    if (input::TakeMouse(dx, dy)) {
+        g_missile_dx += dx;
+        g_missile_dy += dy;
+    }
+    G<float>(ctx.esp + kMissileTurnAcross) += g_missile_dx * kRadiansPerCount;
+    G<float>(ctx.esp + kMissileTurnUpDown) += g_missile_dy * kRadiansPerCount;
+    g_missile_dx = 0.0f;
+    g_missile_dy = 0.0f;
 }
