@@ -268,7 +268,8 @@ const app::GameInfo app::kGame = {
                 {"viewmodel_fov", nullptr, &game::Opt().viewmodel_fov},
                 {"fmv_scale", nullptr, &game::Opt().fmv_scale},
                 {"msaa", nullptr, &game::Opt().msaa},
-                {"smaa", &game::Opt().smaa, nullptr}},  // game settings kept in the settings file
+                {"smaa", &game::Opt().smaa, nullptr},
+                {"ambient_occlusion", nullptr, &game::Opt().ambient_occlusion}},  // game settings kept in the settings file
     .load = game::Load,                     // reads more from the settings file's toml::table
     .save = game::Save,                     // writes more into it
     .init = input::LoadBindings,            // after the settings load, before the window and boot

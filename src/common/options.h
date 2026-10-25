@@ -23,6 +23,7 @@ struct Options {
     bool fps_counter = false;
     uint32_t msaa = 0;  // samples a pixel of the screen, 0 off
     bool smaa = false;  // over the finished frame, HUD included; combines with msaa
+    uint32_t ambient_occlusion = 0;  // from the scene's depth: 0 off, 1 SSAO, 2 GTAO
     uint32_t fmv_scale = 0;  // the full screen films on a wider screen: 0 fill it, 1 in a 4:3 frame
     bool pause_on_focus_loss = true;  // the game and its sound stop while the window is in the background
     float mouse_sensitivity = 1.0f;  // horizontal

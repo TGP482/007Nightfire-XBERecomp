@@ -11,6 +11,7 @@
 #include "app/app.h"
 #include "common/options.h"
 #include "core/diag.h"
+#include "d3d/occlusion.h"
 #include "gpu/backend.h"
 #include "gpu/shaders.h"
 #include "gpu/texture.h"
@@ -321,6 +322,12 @@ void VerticalBlank(X86Context& ctx) {
 
 gpu::State& State() { return g_state; }
 std::recursive_mutex& Lock() { return g_lock; }
+
+void Occlusion(const float (&p)[gpu::kOcclusionParams]) {
+    std::lock_guard<std::recursive_mutex> lock(g_lock);
+    const auto* rects = reinterpret_cast<const uint8_t*>(p);
+    if (g_backend) g_backend->Clear(g_state, gpu::kOcclusionRects, rects, gpu::kClearOcclusion, 0, 0, 0);
+}
 
 }  // namespace d3d
 
