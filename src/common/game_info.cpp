@@ -40,6 +40,10 @@ bool PanelKeyDown(uint32_t msg, uintptr_t key, intptr_t lp, intptr_t* result) {
         app::ToggleMenu();
         return Take(result);
     }
+    if (first_press && !app::MenuOpen() && input::HudKey(int(key))) {
+        g_hud_hidden = !g_hud_hidden;
+        return Take(result);
+    }
     if (msg == WM_KEYDOWN && key == VK_ESCAPE && app::MenuOpen() && !app::Capturing()) {
         app::ToggleMenu();
         return Take(result);
@@ -112,7 +116,6 @@ int16_t Flip(int16_t v) { return int16_t(-1 - v); }
 
 void InvertLook(input::Pad& pad) {
     if (Opt().invert_pad_x) pad.rx = Flip(pad.rx);
-    if (Opt().invert_pad_y) pad.ry = Flip(pad.ry);
 }
 
 input::Pad SlotPad(int port, int slot, const input::Pad& own) {
@@ -260,8 +263,7 @@ const app::GameInfo app::kGame = {
                 {"pause_on_focus_loss", &game::Opt().pause_on_focus_loss, nullptr},
                 {"invert_mouse", &game::Opt().invert_mouse, nullptr},
                 {"invert_mouse_x", &game::Opt().invert_mouse_x, nullptr},
-                {"invert_pad_x", &game::Opt().invert_pad_x, nullptr},
-                {"invert_pad_y", &game::Opt().invert_pad_y, nullptr}},  // game settings kept in the settings file
+                {"invert_pad_x", &game::Opt().invert_pad_x, nullptr}},  // game settings kept in the settings file
     .load = game::Load,                     // reads more from the settings file's toml::table
     .save = game::Save,                     // writes more into it
     .init = input::LoadBindings,            // after the settings load, before the window and boot

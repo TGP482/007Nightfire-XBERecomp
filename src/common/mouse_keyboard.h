@@ -58,5 +58,6 @@ void ResetBindings();
 void LoadBindings();     // after the settings load
 int PressedKey();        // a bindable key or mouse button held now, 0 for none
 bool PanelKey(int vk);   // the settings panel is bound to this key and no key capture wants it
+bool HudKey(int vk);     // the same for the toggle HUD key
 
 }  // namespace input

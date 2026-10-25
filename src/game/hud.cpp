@@ -3,6 +3,7 @@
 #include <unordered_map>
 
 #include "app/app.h"
+#include "common/options.h"
 #include "xdk/hle.h"
 
 // The 2D is laid out on the 640x480 frame, which a widescreen output shows 16:9. While a player's view, the HUD's or
@@ -153,6 +154,10 @@ X86_FUNC(sub_000D9410) {
     for (uint32_t i = 0; i < kLayerArgs; i++) args[i] = kernel::R32(ctx.esp + 4 + i * 4);
     uint32_t index = 0;
     while (index < kViewCount && kernel::R32(kViews + index * 4) != args[kArgView]) index++;
+    if (index == kHudView && game::g_hud_hidden) {
+        kernel::Return(ctx, 0, 0);
+        return;
+    }
     bool narrowed = index < kPlayers || index == kHudView || index == kMenuView;
     uint32_t first = args[kArgFirst];
     uint32_t end = args[kArgEnd];

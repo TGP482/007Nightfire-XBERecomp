@@ -92,6 +92,8 @@ constexpr int kHostKey = -1;
 constexpr int kReloadKey = -2;
 constexpr int kActionKey = -3;
 constexpr int kImageKey = -4;  // another image's own, which it reads through Held
+constexpr int kWalk = -5;      // the move keys at kWalkSpeed while held
+constexpr float kWalkSpeed = 0.5f;  // the stick half pushed
 constexpr Target kActions[] = {
     {{"move_forward", "MOVE FORWARD", "W"}, kForward, 1},
     {{"move_back", "MOVE BACK", "S"}, kForward, -1},
@@ -99,6 +101,7 @@ constexpr Target kActions[] = {
     {{"strafe_right", "STRAFE RIGHT", "D"}, kStrafe, -1},
     {{"jump", "JUMP", "Space"}, kJump, 1},
     {{"crouch", "CROUCH", "C,Ctrl"}, kCrouch, 1},
+    {{"walk", "WALK", "CapsLock"}, kWalk, 0},
     {{"fire", "FIRE", "LMB"}, kFire, 1},
     {{"aim", "MANUAL AIM", "RMB"}, kAim, 1},
     {{"alt_fire", "ALT FIRE", "MMB"}, kAltFire, 1},
@@ -115,6 +118,7 @@ constexpr Target kActions[] = {
     {{"menu_x", "MENU BUTTON X", "X"}, kMenuX, 1},
     {{"menu_y", "MENU BUTTON Y", "Y"}, kMenuY, 1},
     {{"settings_panel", "SETTINGS PANEL", "F10"}, kHostKey, 0},
+    {{"toggle_hud", "TOGGLE HUD", ""}, kHostKey, 0},
     {{"look_up", "LOOK UP", "Up"}, kPitch, 1},
     {{"look_down", "LOOK DOWN", "Down"}, kPitch, -1},
     {{"look_left", "LOOK LEFT", "Left"}, kTurn, -1},
@@ -151,6 +155,8 @@ constexpr size_t HostAction(std::string_view id) {
     return i;
 }
 constexpr size_t kPanelAction = HostAction("settings_panel");
+constexpr size_t kHudAction = HostAction("toggle_hud");
+constexpr size_t kWalkAction = HostAction("walk");
 struct Name {
     int vk;
     const char* name;
@@ -329,16 +335,20 @@ struct Use {
     bool any = false;  // a bound key
 };
 
+bool Moves(int value) { return value == kForward || value == kStrafe; }
+
 Use PressActions(const Binds& binds, bool menu, float* values) {
     static bool pause_held;
     static bool pause_backs;
     bool pause = false;
+    bool walk = std::any_of(binds[kWalkAction].begin(), binds[kWalkAction].end(), Down);
     Use use;
     for (size_t i = 0; i < kCount; i++) {
         const Target& t = kActions[i];
         if (t.value == kHostKey || t.value == kImageKey) continue;
         if (!std::any_of(binds[i].begin(), binds[i].end(), Down)) continue;
         use.any = true;
+        if (t.value == kWalk) continue;
         if (t.value == kReloadKey || t.value == kActionKey) {
             (t.value == kReloadKey ? use.reload : use.action) = true;
             continue;
@@ -352,7 +362,7 @@ Use PressActions(const Binds& binds, bool menu, float* values) {
             values[kAny] += 1.0f;
             continue;
         }
-        values[t.value] += t.amount;
+        values[t.value] += walk && Moves(t.value) ? t.amount * kWalkSpeed : t.amount;
         if (t.value == kTurn) values[kLookX] += t.amount;
         if (t.value == kPitch) values[kLookY] += t.amount;
     }
@@ -593,5 +603,7 @@ int PressedKey() {
 }
 
 bool PanelKey(int vk) { return HostKeyBound(kPanelAction, vk); }
+
+bool HudKey(int vk) { return HostKeyBound(kHudAction, vk); }
 
 }  // namespace input

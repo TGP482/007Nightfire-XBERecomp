@@ -15,6 +15,9 @@ namespace {
 using kernel::G;
 
 constexpr uint32_t kFrameOpen = 0x2C5754;  // byte: a frame 0xE43A0 presents
+// byte: a level is loading, 0xBFA60 to 0xDFF90; each file read (0xDC990) presents spinner frames (0xDC8A0), and
+// the counter's text there read through a null pointer
+constexpr uint32_t kLoading = 0x2ADF50;
 // (x, y, colour, shadow colour, -1, text, style, scale pair or 0, flags, length, width): 640x480 units, y the
 // baseline, colours 0xRRGGBBAA with 0x80 full; the glyphs go into the records below. It returns the text's size.
 constexpr uint32_t kText = 0x6A340;
@@ -126,7 +129,7 @@ X86_FUNC(sub_000E43A0) {
         return;
     }
     game::LegendRow legend = game::TakeMainMenuLegend();
-    bool fps = game::Opt().fps_counter;
+    bool fps = game::Opt().fps_counter && !G<uint8_t>(kLoading);
     if (fps || legend.shown) {
         BeginText(ctx);
         if (fps) DrawFps(ctx, scratch);

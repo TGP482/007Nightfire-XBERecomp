@@ -417,7 +417,6 @@ enum RowId {
     kPadAimHorizontalRow,
     kPadAimVerticalRow,
     kPadInvertXRow,
-    kPadInvertYRow,
 };
 
 // in RowId order
@@ -447,7 +446,6 @@ constexpr StepFn kSteps[] = {
     StepSensitivity<&game::Options::pad_aim_horizontal_sensitivity>,
     StepSensitivity<&game::Options::pad_aim_vertical_sensitivity>,
     StepToggle<&game::Options::invert_pad_x>,
-    StepToggle<&game::Options::invert_pad_y>,
 };
 
 bool Held(int id) { return id == kMonitorRow || id == kDisplayModeRow || id == kResolutionRow; }
@@ -511,7 +509,6 @@ constexpr Row kPadRows[] = {
     {Kind::Value, kPadAimHorizontalRow, "AIM HORIZONTAL SENSITIVITY"},
     {Kind::Value, kPadAimVerticalRow, "AIM VERTICAL SENSITIVITY"},
     {Kind::Value, kPadInvertXRow, "INVERT X AXIS"},
-    {Kind::Value, kPadInvertYRow, "INVERT Y AXIS"},
 };
 
 bool SameDisplay(const Settings& a, const Settings& b) {
@@ -567,7 +564,6 @@ void RestorePadDefaults() {
     o.pad_aim_horizontal_sensitivity = defaults.pad_aim_horizontal_sensitivity;
     o.pad_aim_vertical_sensitivity = defaults.pad_aim_vertical_sensitivity;
     o.invert_pad_x = defaults.invert_pad_x;
-    o.invert_pad_y = defaults.invert_pad_y;
     Save();
 }
 
