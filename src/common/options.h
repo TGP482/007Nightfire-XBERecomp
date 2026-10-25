@@ -27,6 +27,7 @@ struct Options {
     bool hdr_output = true;  // HDR10 on a display with Windows HDR on
     uint32_t colour_blind = 0;  // 0 off, 1 protanopia, 2 deuteranopia, 3 tritanopia
     uint32_t fmv_scale = 0;  // the full screen films on a wider screen: 0 fill it, 1 in a 4:3 frame
+    uint32_t audio_output = 0;  // 0 automatic, 1 2.0 stereo, 2 5.1 surround, 3 mono
     bool pause_on_focus_loss = true;  // the game and its sound stop while the window is in the background
     float mouse_sensitivity = 1.0f;  // horizontal
     float mouse_vertical_sensitivity = 1.0f;

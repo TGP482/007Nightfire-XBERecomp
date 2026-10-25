@@ -22,6 +22,7 @@
 #include <imgui.h>
 
 #include "app/app.h"
+#include "audio/output.h"
 #include "common/menu.h"
 #include "common/monitor.h"
 #include "common/mouse_keyboard.h"
@@ -333,6 +334,17 @@ std::string StepSkipIntros(Settings&, int step) {
     return OnOff(on);
 }
 
+constexpr uint32_t kAudioOutputs[] = {audio::kOutputAuto, audio::kOutputMono, audio::kOutputStereo,
+                                      audio::kOutputSurround};
+const char* const kAudioOutputNames[] = {"AUTOMATIC", "MONO", "2.0 STEREO", "5.1 SURROUND"};
+
+std::string StepAudioOutput(Settings&, int step) {
+    uint32_t& mode = game::Opt().audio_output;
+    const char* name = kAudioOutputNames[StepTable(kAudioOutputs, mode, step)];
+    audio::SetOutputMode(mode);
+    return name;
+}
+
 std::string StepPauseOnFocusLoss(Settings&, int step) {
     bool& on = game::Opt().pause_on_focus_loss;
     if (step) on = !on;
@@ -471,6 +483,7 @@ enum RowId {
     kAoRow,
     kHdrOutputRow,
     kColourBlindRow,
+    kAudioOutputRow,
 };
 
 // in RowId order
@@ -508,6 +521,7 @@ constexpr StepFn kSteps[] = {
     StepAo,
     StepHdrOutput,
     StepColourBlind,
+    StepAudioOutput,
 };
 
 bool Held(int id) { return id == kMonitorRow || id == kDisplayModeRow || id == kResolutionRow; }
@@ -537,6 +551,7 @@ constexpr Row kSettingsRows[] = {
     {Kind::Heading, -1, "GENERAL"},
     {Kind::Value, kSkipIntrosRow, "SKIP INTROS"},
     {Kind::Value, kPauseOnFocusLossRow, "PAUSE ON FOCUS LOSS"},
+    {Kind::Value, kAudioOutputRow, "AUDIO OUTPUT"},
     {Kind::Heading, -1, "INPUT DEVICES"},
     {Kind::Value, kPlayer1Row, "PLAYER 1"},
     {Kind::Value, kPlayer2Row, "PLAYER 2"},
@@ -662,6 +677,8 @@ void RestoreDefaults(int page) {
     game::Opt().smaa = game::Options{}.smaa;
     game::Opt().ambient_occlusion = game::Options{}.ambient_occlusion;
     game::Opt().pause_on_focus_loss = game::Options{}.pause_on_focus_loss;
+    game::Opt().audio_output = game::Options{}.audio_output;
+    audio::SetOutputMode(game::Opt().audio_output);
     game::Opt().monitor = game::Options{}.monitor;
     game::Opt().players = game::Options{}.players;
     g_display_held = false;

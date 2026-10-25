@@ -14,6 +14,7 @@
 #include <toml++/toml.hpp>
 
 #include "app/app.h"
+#include "audio/output.h"
 #include "common/menu.h"
 #include "common/monitor.h"
 #include "common/mouse_keyboard.h"
@@ -218,6 +219,7 @@ void Load(const void* table) {
         for (auto&& [id, value] : *keys)
             if (auto v = value.value<std::string>()) o.keys[std::string(id.str())] = *v;
     LoadPlayers(t, o.players);
+    audio::SetOutputMode(o.audio_output);
 }
 
 void Save(void* table) {
@@ -269,6 +271,7 @@ const app::GameInfo app::kGame = {
                 {"fmv_scale", nullptr, &game::Opt().fmv_scale},
                 {"hdr_output", &game::Opt().hdr_output, nullptr},
                 {"colour_blind", nullptr, &game::Opt().colour_blind},
+                {"audio_output", nullptr, &game::Opt().audio_output},
                 {"msaa", nullptr, &game::Opt().msaa},
                 {"smaa", &game::Opt().smaa, nullptr},
                 {"ambient_occlusion", nullptr, &game::Opt().ambient_occlusion}},  // game settings kept in the settings file
