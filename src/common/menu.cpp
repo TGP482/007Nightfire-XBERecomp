@@ -301,6 +301,12 @@ std::string StepSkipIntros(Settings&, int step) {
     return OnOff(on);
 }
 
+std::string StepPauseOnFocusLoss(Settings&, int step) {
+    bool& on = game::Opt().pause_on_focus_loss;
+    if (step) on = !on;
+    return OnOff(on);
+}
+
 std::string SensitivityText(int tenths) {
     char text[16];
     std::snprintf(text, sizeof(text), "%.1f", float(tenths) / kTenthsPerUnit);
@@ -398,6 +404,7 @@ enum RowId {
     kPlayer3Row,
     kPlayer4Row,
     kFpsCounterRow,
+    kPauseOnFocusLossRow,
 };
 
 // in RowId order
@@ -417,6 +424,7 @@ constexpr StepFn kSteps[] = {
     StepPlayerPort<2>,
     StepPlayerPort<3>,
     StepFpsCounter,
+    StepPauseOnFocusLoss,
 };
 
 bool Held(int id) { return id == kMonitorRow || id == kDisplayModeRow || id == kResolutionRow; }
@@ -439,8 +447,9 @@ constexpr Row kSettingsRows[] = {
     {Kind::Value, kFpsCounterRow, "FPS COUNTER"},
     {Kind::Heading, -1, "GRAPHICS"},
     {Kind::Value, kAnisoRow, "ANISOTROPIC FILTERING"},
-    {Kind::Heading, -1, "GAME"},
+    {Kind::Heading, -1, "GENERAL"},
     {Kind::Value, kSkipIntrosRow, "SKIP INTROS"},
+    {Kind::Value, kPauseOnFocusLossRow, "PAUSE ON FOCUS LOSS"},
     {Kind::Heading, -1, "INPUT DEVICES"},
     {Kind::Value, kPlayer1Row, "PLAYER 1"},
     {Kind::Value, kPlayer2Row, "PLAYER 2"},
@@ -520,6 +529,7 @@ void RestoreDefaults(int page) {
     s.join_ip = join_ip;
     game::Opt().skip_intros = game::Options{}.skip_intros;
     game::Opt().fps_counter = game::Options{}.fps_counter;
+    game::Opt().pause_on_focus_loss = game::Options{}.pause_on_focus_loss;
     game::Opt().monitor = game::Options{}.monitor;
     game::Opt().players = game::Options{}.players;
     g_display_held = false;
