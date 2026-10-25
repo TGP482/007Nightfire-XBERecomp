@@ -21,12 +21,15 @@ else()
 endif()
 include(${SDK}/cmake/XbeRecomp.cmake)
 
+include(cmake/image_module.cmake)
+
 file(GLOB XBE_HOST_SOURCES CONFIGURE_DEPENDS src/*/*.cpp)
-list(FILTER XBE_HOST_SOURCES EXCLUDE REGEX "/src/(game|driving)/")
+list(FILTER XBE_HOST_SOURCES EXCLUDE REGEX "/src/(game|driving|launcher)/")
 # SDL's headers go to the gyro code too (SDL is linked LINK_ONLY)
 set_source_files_properties(src/common/gyro.cpp PROPERTIES INCLUDE_DIRECTORIES "${sdl3_SOURCE_DIR}/include")
-# src/d3d, src/dsound and src/audio replace the SDK's Direct3D, renderer, DirectSound and audio output
-list(FILTER XBE_RUNTIME_SOURCES EXCLUDE REGEX "/(xdk/dsound|xdk/d3d8|gpu/d3d12|audio/xaudio2)\\.cpp$")
+# src/d3d, src/dsound and src/audio replace the SDK's Direct3D, renderer, DirectSound and audio output; src/app and
+# src/kernel its code builder and relaunch, which go through nightfire.exe
+list(FILTER XBE_RUNTIME_SOURCES EXCLUDE REGEX "/(xdk/dsound|xdk/d3d8|gpu/d3d12|audio/xaudio2|app/game_code|kernel/boot)\\.cpp$")
 
 # partitions as xbe_symbols wrote them into config/game.toml
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS config/game.toml)
@@ -43,9 +46,15 @@ file(STRINGS config/driving.toml DRIVING_PARTITIONS REGEX "^partitions *=")
 string(REGEX MATCH "[0-9]+" DRIVING_PARTITIONS "${DRIVING_PARTITIONS}")
 
 # target name = GAME_EXE in build.bat, xbe = GAME_XBE
-add_xbe_image(007Nightfire default.xbe game.toml ${GAME_PARTITIONS} game)
+add_image_module(007Nightfire default.xbe game.toml ${GAME_PARTITIONS} game)
 # the driving missions, a second engine the game launches as its own image
-add_xbe_image(007NightfireDriving Driving.xbe driving.toml ${DRIVING_PARTITIONS} driving)
+add_image_module(007NightfireDriving Driving.xbe driving.toml ${DRIVING_PARTITIONS} driving)
+
+# nightfire.exe starts either image's runtime
+add_executable(nightfire WIN32 src/launcher/main.cpp)
+target_compile_definitions(nightfire PRIVATE UNICODE _UNICODE)
+target_link_options(nightfire PRIVATE -fuse-ld=lld)
+add_dependencies(nightfire 007Nightfire 007NightfireDriving)
 
 # build_info.h for the version resource, rewritten only when the commit changes
 find_package(Git QUIET)
@@ -57,7 +66,5 @@ add_custom_target(build_info
     VERBATIM)
 set_source_files_properties(src/common/version.rc PROPERTIES
     INCLUDE_DIRECTORIES ${CMAKE_CURRENT_BINARY_DIR} OBJECT_DEPENDS ${BUILD_INFO})
-target_sources(007Nightfire PRIVATE src/common/version.rc)
-target_sources(007NightfireDriving PRIVATE src/common/version.rc)
-add_dependencies(007Nightfire build_info)
-add_dependencies(007NightfireDriving build_info)
+target_sources(nightfire PRIVATE src/common/version.rc)
+add_dependencies(nightfire build_info)

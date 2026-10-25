@@ -10,7 +10,7 @@ This port was created using the [Xbox XBE Recomp](https://github.com/TGP482/Xbox
 The latest version of [007Nightfire-XBERecomp](https://github.com/TGP482/007Nightfire-XBERecomp/releases) can be found in the Releases page.
 
 - Place your game files in the `assets` folder. This can be an ISO, or the extracted data files.
-- Run `007Nightfire.exe`. The first start compiles the game's code for your PC, this only happens once.
+- Run `nightfire.exe`. The first start compiles the game's code for your PC, this only happens once.
 - Recomp Settings can be adjusted in the in-game options menu while the game is running, or through the Settings overlay, which is opened with <kbd>F10</kbd> by default.
 
 ## Features
@@ -88,4 +88,4 @@ Install [Visual Studio 2022](https://visualstudio.microsoft.com/downloads/) and 
 
 ### 4. Build the Project
 - Run `build.bat`. The first build recompiles the entire game and can take 30 to 90 minutes on weaker systems.
-- When it finishes, run `out\build\release\007Nightfire.exe`.
+- When it finishes, run `out\build\release\nightfire.exe`.

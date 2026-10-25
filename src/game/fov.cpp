@@ -243,6 +243,16 @@ X86_FUNC(sub_00025190) {
     if (view && G<float>(view + kViewAngle) == angle) g_views[index].game_angle = angle;
 }
 
+// the map loader starts the game's heap over (0x70AE0 allocates from it), so the models in it are gone
+X86_EXTERN_FUNC(__imp__sub_00070A40);
+X86_FUNC(sub_00070A40) {
+    for (ViewFov& fov : g_views) {
+        fov.player = 0;
+        fov.model = 0;
+    }
+    __imp__sub_00070A40(ctx, base);
+}
+
 // a player's camera each frame (player)
 X86_EXTERN_FUNC(__imp__sub_000A8A60);
 X86_FUNC(sub_000A8A60) {

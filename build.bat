@@ -4,6 +4,7 @@ set "GAME_TITLE=007: Nightfire - XBE Recomp"
 set "GAME_XBE=default.xbe"
 set "DRIVING_XBE=Driving.xbe"
 set "GAME_EXE=007Nightfire"
+set "LAUNCHER=nightfire"
 title %GAME_TITLE% - Build
 cd /d "%~dp0"
 echo.
@@ -65,11 +66,11 @@ cmake --build "%OUT%" || goto :fail
 
 echo.
 echo   %GAME_TITLE% built.
-echo   out\build\%PRESET%\%GAME_EXE%.exe
+echo   out\build\%PRESET%\%LAUNCHER%.exe
 echo.
 if defined CI exit /b 0
 choice /c YN /n /m "  Play now? [Y/N] "
-if not errorlevel 2 (start "" /d "%OUT%" "%OUT%\%GAME_EXE%.exe") else (pause)
+if not errorlevel 2 (start "" /d "%OUT%" "%OUT%\%LAUNCHER%.exe") else (pause)
 exit /b 0
 
 rem helpers
