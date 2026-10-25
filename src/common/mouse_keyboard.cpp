@@ -337,6 +337,17 @@ struct Use {
 
 bool Moves(int value) { return value == kForward || value == kStrafe; }
 
+// a move key and a strafe key together go as fast as one, as the stick does pushed into a corner
+void LimitDiagonal(float* values) {
+    float forward = values[kForward];
+    float strafe = values[kStrafe];
+    float length = std::hypot(forward, strafe);
+    float most = std::max(std::abs(forward), std::abs(strafe));
+    if (length <= most) return;
+    values[kForward] = forward * most / length;
+    values[kStrafe] = strafe * most / length;
+}
+
 Use PressActions(const Binds& binds, bool menu, float* values) {
     static bool pause_held;
     static bool pause_backs;
@@ -367,6 +378,7 @@ Use PressActions(const Binds& binds, bool menu, float* values) {
         if (t.value == kPitch) values[kLookY] += t.amount;
     }
     pause_held = pause;
+    LimitDiagonal(values);
     return use;
 }
 
