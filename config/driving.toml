@@ -1015,6 +1015,33 @@ call = "DrivingStepFactor"
 at = 0x86A8B
 call = "DrivingStepFactor"
 
+# path players (0x7FBC0): AI path cars and AIPathAnim cameras move on the game clock (src/driving/path_steps.cpp)
+[[hook]]
+at = 0x3E665
+call = "DrivingPathClock"
+
+[[hook]]
+at = 0x7FC32
+call = "DrivingPathRamp"
+on_true = 0x7FD02
+
+[[hook]]
+at = 0x7FCFB  # ticks before the ramp starts +0xC8
+call = "DrivingTickless"
+on_true = 0x7FD02
+
+[[hook]]
+at = 0x7FE3B
+call = "DrivingPathRate"
+
+[[hook]]
+at = 0x7FE4E
+call = "DrivingPathRate"
+
+[[hook]]
+at = 0x7FE61
+call = "DrivingPathRate"
+
 # people, rumble, rules and props: steps per tick scale to the update (src/driving/world_steps.cpp)
 [[hook]]
 at = 0x19721  # animation time step

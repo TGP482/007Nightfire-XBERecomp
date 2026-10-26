@@ -12,6 +12,7 @@ bool UpdateTicked();    // the running update crossed a console tick
 double FrameTicks();    // console ticks this frame covers
 uint32_t FrameTicksCrossed();
 uint32_t UpdateCount();
+double TickCarry();  // of a tick, real time the game clock has not counted yet
 
 double Ease(double gain);      // a share taken once per tick, for this update
 double Decay(double factor);   // a factor applied once per tick, for this update

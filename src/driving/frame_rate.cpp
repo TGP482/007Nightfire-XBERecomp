@@ -66,6 +66,7 @@ bool UpdateTicked() { return g_time.update_ticked; }
 double FrameTicks() { return g_time.frame_ticks; }
 uint32_t FrameTicksCrossed() { return g_time.frame_crossed; }
 uint32_t UpdateCount() { return g_time.updates; }
+double TickCarry() { return g_time.carry; }
 
 double Ease(double gain) {
     if (gain <= 0.0 || gain >= 1.0) return gain;
