@@ -39,3 +39,12 @@ X86_FUNC(sub_0006B040) {
     __imp__sub_0006B040(ctx, base);
     game::SaveChangedOptions(ctx);
 }
+
+// A character's animation change (0x33F20) blends the new layer in over the old one. A character holds at most 32
+// layers (0x15C30) and each fades out over 8 frames of 60 fps, so past 240 fps a change on every frame fills them and
+// the new layer is null; the game then writes through it (0x33FBB). The change runs without the blend instead.
+
+// at 0x33F86, the blend; the new layer's slot is in ebp
+bool SkipBlendWithoutLayer(X86Context& ctx, uint8_t*) {
+    return kernel::G<uint32_t>(ctx.ebp) == 0;
+}
