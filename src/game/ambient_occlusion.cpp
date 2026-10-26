@@ -42,7 +42,7 @@ void ApplyOcclusion(bool gtao) {
     const float p[gpu::kOcclusionParams] = {
         1 / Projection(kScaleX), 1 / Projection(kScaleY), Projection(kCentreX), Projection(kCentreY),
         Projection(kDepthOffset), Projection(kDepthScale), fog_slope, -G<float>(kFogOffset), fog_on,
-        gtao ? 1.0f : 0.0f};
+        gtao ? 1.0f : 0.0f, 1 / G<float>(kProjectionScale)};
     d3d::Occlusion(p);
 }
 

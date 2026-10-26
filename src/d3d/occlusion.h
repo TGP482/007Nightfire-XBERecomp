@@ -7,7 +7,7 @@ namespace gpu {
 constexpr uint32_t kClearOcclusion = 0x80000000;  // no D3DCLEAR flag: the rects hold the parameters below
 constexpr uint32_t kOcclusionRects = 3;
 // 1 / the projection's x and y scale, its x and y centre, view z = [4] / (depth - [5]), then the fog
-// (slope, offset and amount over view z) and 1 for GTAO, else SSAO
+// (slope, offset and amount over view z), 1 for GTAO, else SSAO, and view z per clip w unit of a w buffer
 constexpr uint32_t kOcclusionParams = kOcclusionRects * 4;
 
 }  // namespace gpu

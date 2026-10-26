@@ -320,10 +320,11 @@ float Raw(int2 p) { return depth.Load(int3(p, 0)); }
 #endif
 Texture2D<float2> ao : register(t1);
 float4 vs(uint id : SV_VertexID) : SV_Position { return float4(float2((id << 1) & 2, id & 2) * float2(2, -2) + float2(-1, 1), 0, 1); }
-// view space position of a pixel. proj: 1 / scale xy, centre xy; zp: z = x / (depth - y); vp: viewport in pixels
+// view space position of a pixel. proj: 1 / scale xy, centre xy; zp: z = x / (depth - y), or depth * z when z is set
+// (a w buffer); vp: viewport in pixels
 float3 View(float2 px) {
     int2 p = clamp(int2(px), int2(vp.xy), int2(vp.xy + vp.zw) - 1);
-    float z = zp.x / (Raw(p) - zp.y);
+    float z = zp.z != 0 ? Raw(p) * zp.z : zp.x / (Raw(p) - zp.y);
     float2 ndc = (p + 0.5 - vp.xy) / vp.zw * float2(2, -2) + float2(-1, 1);
     return float3((ndc - proj.zw) * proj.xy * z, z);
 }
@@ -674,6 +675,7 @@ struct DrawShaders {
     bool prog = false;  // a vertex program, else the fixed function pipeline
     bool quad = false;
     bool fixed_transform = false;  // fixed function on untransformed vertices: the shader reads matrices and lights
+    bool wbuffer = false;  // D3DZB_USEW: the pixel shader writes kWDepthHlsl's depth
     FixedKey fk;
     uint64_t vkey = 0;
     uint64_t vh = 0;
@@ -860,6 +862,7 @@ private:
     void ExpandPoints(D3D12_GRAPHICS_PIPELINE_STATE_DESC& d);
     float TargetScale() const;  // host pixels per console pixel of the bound target
     float RenderTargetShift(const State& s, const DrawShaders& sh) const;
+    void FillWBufferConstants(const State& s, const DrawShaders& sh, const PsoKey& k, DrawConstants& c) const;
     void UploadConstants(const State& s, const DrawShaders& sh, const PsoKey& k, const DrawTextures& stages,
                          GuestExtent size, DrawConstants& c);
     void FillTextureConstants(const State& s, const DrawShaders& sh, const DrawTextures& stages, DrawConstants& c);
@@ -2385,6 +2388,29 @@ bool D3D12Backend::BindStageTexturesAndTargets(const State& s, DrawTextures& sta
 
 constexpr uint64_t kPixelKeySalt = 0x9E3779B97F4A7C15ull;
 
+// D3DZB_USEW: the console stores the clip w a pixel interpolates (SV_Position.w), plus the polygon offset, whose
+// slope comes from 1 / w as that is the one linear across the triangle
+const char* kWDepthHlsl = R"(
+float WDepth(float w) {
+    float rw = 1 / w;
+    float slope = max(abs(ddx(rw)), abs(ddy(rw))) * w * w * ext.x;
+    return saturate(w * ext.x + ext.y + ext.z * slope);
+}
+)";
+
+const std::string kPixelEntry = "float4 main(VOut i, bool front : SV_IsFrontFace) : SV_Target {\n";
+
+const std::string kWDepthEntry =
+    "float4 main(VOut i, bool front : SV_IsFrontFace, out float wdepth : SV_Depth) : SV_Target {\n"
+    "    wdepth = WDepth(i.pos.w);\n";
+
+std::string PixelSource(const PixelKey& pk, bool wbuffer) {
+    std::string src = PixelHlsl(pk);
+    size_t at = src.find(kPixelEntry);
+    if (!wbuffer || at == std::string::npos) return src;
+    return src.replace(at, kPixelEntry.size(), kWDepthHlsl + kWDepthEntry);
+}
+
 // sets sh.ph and sh.ps_code, compiling the shader on a cache miss
 void D3D12Backend::EnsurePixelShader(const PixelKey& pk, DrawShaders& sh) {
     // pixel shaders share the map with vertex shaders, the salt keeps their keys apart
@@ -2394,7 +2420,7 @@ void D3D12Backend::EnsurePixelShader(const PixelKey& pk, DrawShaders& sh) {
         sh.ph = pit->second;
         return;
     }
-    sh.ps_code = Compile(PixelHlsl(pk), "main", "ps_5_0", sh.ph);
+    sh.ps_code = Compile(PixelSource(pk, sh.wbuffer), "main", "ps_5_0", sh.ph);
     shader_src_[sh.pkey ^ kPixelKeySalt] = sh.ph;
 }
 
@@ -2412,6 +2438,13 @@ void KeyBlend(const State& s, PsoKey& k) {
 
 constexpr float kDepth24Max = 16777215.0f;  // 2^24 minus 1: a 24 bit depth buffer's units per 1.0
 
+constexpr uint32_t kZUseW = 2;  // D3DZB_USEW
+
+// polygon offset slopes are per console pixel, an upscaled target's pixels are smaller
+float HostSlopeScale(const State& s, const Target* ds) {
+    return Bits(SimpleState(s, kMSlopeScale)) * (ds ? float(ds->w) / ds->gw : 1.0f);
+}
+
 void D3D12Backend::KeyDepthStencil(const State& s, const Assembled& a, PsoKey& k) {
     k.zen = s.rs[kRsZEnable] != 0;
     if (k.zen) {
@@ -2427,11 +2460,10 @@ void D3D12Backend::KeyDepthStencil(const State& s, const Assembled& a, PsoKey& k
         k.szfail = SimpleState(s, kMStencilZFail);
         k.spass = SimpleState(s, kMStencilPass);
     }
-    // polygon offset: bias in depth buffer units, the target is always 24 bit; the slope is per console pixel,
-    // and an upscaled target's pixels are smaller
-    if (a.topology == Topology::Triangles && SimpleState(s, kMSolidOffsetEnable)) {
+    // polygon offset: bias in depth buffer units, the target is always 24 bit; a w buffer's is in kWDepthHlsl
+    if (s.rs[kRsZEnable] != kZUseW && a.topology == Topology::Triangles && SimpleState(s, kMSolidOffsetEnable)) {
         k.zbias = int32_t(std::lround(Bits(SimpleState(s, kMDepthOffset)) * kDepth24Max / s.zscale));
-        k.zslope = Bits(SimpleState(s, kMSlopeScale)) * (bound_ds_ ? float(bound_ds_->w) / bound_ds_->gw : 1.0f);
+        k.zslope = HostSlopeScale(s, bound_ds_);
     }
 }
 
@@ -2652,6 +2684,27 @@ void FillLightConstants(const State& s, const FixedKey& fk, DrawConstants& c) {
     }
 }
 
+// the projection's far clip w as D3DDevice_SetTransform finds it (0x1039C4)
+float ProjectionFarW(const float* m) {
+    float m33 = m[10];
+    float m34 = m[11];
+    float m43 = m[14];
+    float m44 = m[15];
+    if (m33 == m34 || m33 == 0) return 1;
+    return (m44 - m43) / (m33 - m34) * m34 + m44;
+}
+
+// kWDepthHlsl's ext: x turns SV_Position.w into depth, y the polygon offset, z its slope factor
+void D3D12Backend::FillWBufferConstants(const State& s, const DrawShaders& sh, const PsoKey& k,
+                                        DrawConstants& c) const {
+    // the fixed function composite is scaled by zscale / far w (0x1007D2), a program's oPos.w is in buffer units
+    c.ext[0] = sh.prog ? 1.0f / s.zscale : 1.0f / ProjectionFarW(s.transforms[kTsProjection].data());
+    if (k.topo == uint32_t(Topology::Triangles) && SimpleState(s, kMSolidOffsetEnable)) {
+        c.ext[1] = Bits(SimpleState(s, kMDepthOffset)) / s.zscale;
+        c.ext[2] = HostSlopeScale(s, bound_ds_);
+    }
+}
+
 void D3D12Backend::UploadConstants(const State& s, const DrawShaders& sh, const PsoKey& k, const DrawTextures& stages,
                                    GuestExtent size, DrawConstants& c) {
     Alloc vc = Upload(sizeof(s.vsc), 256);
@@ -2663,6 +2716,7 @@ void D3D12Backend::UploadConstants(const State& s, const DrawShaders& sh, const 
     FillFogConstants(s, sh.prog, c);
     FillCombinerConstants(s, c);
     if (ext_) ext_->Constants(reinterpret_cast<float(*)[4]>(vc.cpu), c.ext, bound_rt_, k.blend ? k.src : 1);
+    if (sh.wbuffer) FillWBufferConstants(s, sh, k, c);
     FillTextureConstants(s, sh, stages, c);
     if (sh.fixed_transform) {
         FillTransformConstants(s, size, c);
@@ -2745,7 +2799,7 @@ void D3D12Backend::CaptureShader(const char* kind, uint64_t key, const std::stri
 void D3D12Backend::CaptureShaders(const State& s, const Assembled& a, const DrawShaders& sh, const PixelKey& pk) {
     std::string src = VertexHlsl(s, a, sh);
     CaptureShader("vs", sh.vkey, sh.quad ? QuadHlsl(std::move(src)) : src);
-    CaptureShader("ps", sh.pkey, PixelHlsl(pk));
+    CaptureShader("ps", sh.pkey, PixelSource(pk, sh.wbuffer));
 }
 
 D3D12_SRV_DIMENSION NullViewDimension(uint8_t kind) {
@@ -2964,7 +3018,8 @@ void D3D12Backend::Draw(const State& s, uint32_t prim, uint32_t start, uint32_t 
     if (!BindStageTexturesAndTargets(s, stages)) return;
     PixelKey pk = MakePixelKey(s, stages.info);
     pk.quad = sh.quad;
-    sh.pkey = Hash(&pk, sizeof(pk));
+    sh.wbuffer = bound_ds_ && s.rs[kRsZEnable] == kZUseW;
+    sh.pkey = Hash(&sh.wbuffer, sizeof(sh.wbuffer), Hash(&pk, sizeof(pk)));
     EnsurePixelShader(pk, sh);
     if (!sh.vs_code || !sh.ps_code) return;
 
@@ -3622,7 +3677,8 @@ void D3D12Backend::Occlusion(const State& s, const float p[kOcclusionParams]) {
     float rect_w = float(rect.right - rect.left);
     float rect_h = float(rect.bottom - rect.top);
     // kAoHlsl's proj, zp, vp, opt and fog; each pass sets its blur step in opt.zw
-    AoFrame f{.c = {p[0], p[1], p[2], p[3], p[4] * zr, v.min_z + p[5] * zr, 0, 0,
+    float w_depth = s.rs[kRsZEnable] == kZUseW ? p[10] * s.zscale : 0;  // view z per unit of depth
+    AoFrame f{.c = {p[0], p[1], p[2], p[3], p[4] * zr, v.min_z + p[5] * zr, w_depth, 0,
                     float(rect.left), float(rect.top), rect_w, rect_h, kAoRadius, kAoMaxSpan * rect_h, 0, 0,
                     p[6], p[7], p[8], 0},
               .rect = rect,
