@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <iterator>
 
 #include "app/app.h"
 #include "common/menu.h"
@@ -89,6 +90,10 @@ constexpr int kMaxWidgets = 256;
 // the main menu page and its button legend text
 constexpr uint32_t kMainMenuId = 0x40000002;
 constexpr uint32_t kLegendId = 0x10000001;
+// the pause page's tabs by sub, RECOMP's last (options_menu.cpp)
+constexpr uint32_t kPauseId = 0x4000004B;
+constexpr uint32_t kPauseWidgets = 0x10000028;
+constexpr uint32_t kPauseTabs[] = {0, 1, 3, 4, 0x11};
 
 uint32_t g_main_menu = 0;  // the main menu page while it takes input, until the menus' next run
 
@@ -237,6 +242,18 @@ void LogPage(uint32_t page) {
     }
 }
 
+bool PauseTab(uint32_t page, uint32_t w) {
+    if (R32(page + kId) != kPauseId || R32(w + kId) != kPauseWidgets) return false;
+    const uint32_t* end = std::end(kPauseTabs);
+    return std::find(std::begin(kPauseTabs), end, R32(w + kSub)) != end;
+}
+
+void MoveCursor(uint32_t record, int x, int y) {
+    uint32_t cursor = R32(record + kRecordCursor);
+    G<int16_t>(cursor + kCursorX) = int16_t(x);
+    G<int16_t>(cursor + kCursorY) = int16_t(y);
+}
+
 float ViewTop() {
     uint32_t view = R32(kMenuView);
     return view ? G<float>(view + kViewTop) : 0.0f;
@@ -301,6 +318,11 @@ void Point(X86Context& ctx, uint32_t record, uint32_t page) {
     uint32_t w = WidgetAt(page, px, py);
     if (!w) return;
     uint32_t focus = R32(page + kPageFocus);
+    // a pause tab shows its page on a click, not as the pointer passes over it
+    if (w != focus && PauseTab(page, w)) {
+        if (click) MoveCursor(record, x, y);
+        return;
+    }
     uint8_t type = TypeOf(w);
     // widgets of one id all take input while any of them is focused; focusing a list of the focus's id would tell the
     // page to show that list alone (the pause hides its tabs' content then)
@@ -308,9 +330,7 @@ void Point(X86Context& ctx, uint32_t record, uint32_t page) {
     if (type == kList && shared) {
         SelectRow(ctx, w, py, click);
     } else if (w != focus && !(shared && type != kButton && type != kText)) {
-        uint32_t cursor = R32(record + kRecordCursor);
-        G<int16_t>(cursor + kCursorX) = int16_t(x);
-        G<int16_t>(cursor + kCursorY) = int16_t(y);
+        MoveCursor(record, x, y);
     }
     if (click && Accepts(type)) Tap(kAccept);
 }
