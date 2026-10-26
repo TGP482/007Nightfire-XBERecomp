@@ -5,14 +5,14 @@
 
 // A player's update (0xAD520) recharges the gadgets every second, fourth or sixth frame (frame count 0x1F65B4) by
 // 60 over the rate (0x17C100), cut to a whole number: past 60 fps that is 0 and they never recharge. They recharge as
-// at 30 fps instead, by 2 on those frames of a 30 fps clock that runs on the game's own step.
+// at 60 fps instead, by 1 on those frames of a 60 fps clock that runs on the game's own step.
 namespace {
 
 using kernel::G;
 
 constexpr uint32_t kStep = 0x17C104;  // seconds the frame steps
-constexpr double kConsoleRate = 30.0;
-constexpr int16_t kRecharge = 2;  // 60 over 30
+constexpr double kConsoleRate = 60.0;
+constexpr int16_t kRecharge = 1;  // 60 over 60
 
 // a gadget's charge on the player and the full charge in its weapon record (0x18CFA0 on, 0x10C apart, +0x92)
 struct Gadget {
@@ -30,7 +30,7 @@ constexpr std::array<Gadget, 6> kGadgets = {{
 }};
 
 struct Clock {
-    double due = 0.0;  // 30 fps frames not run yet
+    double due = 0.0;  // 60 fps frames not run yet
     uint32_t frame = 0;
 };
 

@@ -5,10 +5,10 @@
 #include "game/main_menu.h"
 #include "xdk/hle.h"
 
-// The menus count frames, not time: 0x94370 runs them once a frame (their input, pages and focus pulse). It runs 30
+// The menus count frames, not time: 0x94370 runs them once a frame (their input, pages and focus pulse). It runs 60
 // times a second instead, as on the console, at any frame rate; the widgets' 2D items stay drawn between runs. A press
 // is a state bit for one frame, so the presses of the frames between runs are kept for the next run. A held action
-// repeats after a count of its frames, which also goes up 30 times a second while a menu is up.
+// repeats after a count of its frames, which also goes up 60 times a second while a menu is up.
 namespace {
 
 using kernel::G;
@@ -25,7 +25,7 @@ constexpr uint8_t kEdges = 4 | 8;  // pressed, repeating
 constexpr uint8_t kRepeating = 8;
 // u16 frames each action value has been held, beside the states; it repeats from 46 on, every 8th
 constexpr uint32_t kHeldFrames = 0x1FE784;
-constexpr double kConsoleRate = 30.0;
+constexpr double kConsoleRate = 60.0;
 
 using Clock = std::chrono::steady_clock;
 
@@ -72,7 +72,7 @@ void ApplyEdges() {
     g_edges.fill(0);
 }
 
-// true when a 30 Hz step is due, the next then due a period later
+// true when a 60 Hz step is due, the next then due a period later
 bool UpdateDue(Clock::time_point& next) {
     constexpr std::chrono::duration<double> kSeconds{1.0 / kConsoleRate};
     constexpr auto kPeriod = std::chrono::duration_cast<Clock::duration>(kSeconds);

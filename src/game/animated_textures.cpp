@@ -7,11 +7,11 @@
 // Animated textures (screens, water, fire) pick their picture from the game's frame count: the count over the frames
 // a picture lasts (+0x28 of the texture, table 0x2ABE80), modulo its pictures (+0x24). The count goes up once a
 // frame, so they played as fast as the frame rate. Around the draws that read it (0xDD692, 0xDD7E8, 0xDE457,
-// 0xDFA18, 0xE00AD, 0xE012F, 0xE0696) the count is a clock of their own, 30 a second while the game's count moves.
+// 0xDFA18, 0xE00AD, 0xE012F, 0xE0696) the count is a clock of their own, 60 a second while the game's count moves.
 namespace {
 
 constexpr uint32_t kFrameCount = 0x1F65B4;  // 0x6ACA0 adds one a frame unless paused; a level start sets 1
-constexpr double kConsoleRate = 30.0;
+constexpr double kConsoleRate = 60.0;
 
 using Clock = std::chrono::steady_clock;
 

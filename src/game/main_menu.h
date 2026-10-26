@@ -10,7 +10,7 @@ struct LegendRow {
     float top = 0.0f;
     float height = 0.0f;
 };
-// each frame: latched by the menu's update and kept between the menus' runs, which are 30 a second
+// each frame: latched by the menu's update and kept between the menus' runs, which are 60 a second
 LegendRow TakeMainMenuLegend();
 void ClearMainMenuLegend();  // before each run of the menus
 

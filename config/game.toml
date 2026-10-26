@@ -275,7 +275,7 @@ DSound_StreamVtable2        = 0x162640
 XPP_GamepadType             = 0x15722C
 XPP_MemoryUnitType          = 0
 
-# the gadgets recharge on a 30 fps clock (src/game/gadget_recharge.cpp)
+# the gadgets recharge on a 60 fps clock (src/game/gadget_recharge.cpp)
 [[hook]]
 at = 0xADA5C
 call = "GadgetRecharge"
