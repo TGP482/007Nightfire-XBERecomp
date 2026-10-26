@@ -12,6 +12,7 @@
 #include "common/options.h"
 #include "core/diag.h"
 #include "d3d/occlusion.h"
+#include "d3d/simple_dirty.h"
 #include "d3d/visibility.h"
 #include "gpu/backend.h"
 #include "gpu/shaders.h"
@@ -110,6 +111,12 @@ constexpr uint32_t kStageStates = XDK_TextureState_Stage, kStreamSize = XDK_Stre
 gpu::State g_state;
 std::unique_ptr<gpu::Backend> g_backend;
 std::recursive_mutex g_lock;
+
+// every write to g_state.simple goes through here or marks it
+void SetSimple(uint32_t method, uint32_t v) {
+    g_state.simple[method >> 2] = v;
+    gpu::MarkSimple(method >> 2);
+}
 
 std::unordered_map<uint32_t, std::shared_ptr<gpu::VertexShader>> g_vs;
 std::unordered_map<uint32_t, std::shared_ptr<gpu::PixelShader>> g_ps;
@@ -357,6 +364,7 @@ HLE_STDCALL(Direct3D_CreateDevice, 6) {
     W32(kDevicePtr, kDevice);
     ScratchPush();
     g_state = gpu::State{};
+    gpu::MarkAllSimple();
     SetFrameBuffers("CreateDevice", a[4]);
     // 60 Hz, widescreen
     if (XDK_CDevice_DisplayFlags != xdk::kUnknown) SetDev(XDK_CDevice_DisplayFlags, 0x400000 | (app::Widescreen() ? 0x10000 : 0));
@@ -681,7 +689,7 @@ HLE_STDCALL(D3DDevice_SetScreenSpaceOffset, 2) {
 
 HLE_FASTCALL(D3DDevice_SetRenderState_Simple, 0) {
     uint32_t method = a[0] & 0x1FFC, value = a[1];
-    g_state.simple[method >> 2] = value;
+    SetSimple(method, value);
     return 0;
 }
 
@@ -689,7 +697,7 @@ HLE_STDCALL(D3DDevice_SetRenderStateNotInline, 2) {
     uint32_t rs = a[0], v = a[1];
     if (rs < gpu::kRsDeferredFirst) {
         uint32_t method = R32(kSimpleEncode + rs * 4) & 0x1FFC;
-        g_state.simple[method >> 2] = v;
+        SetSimple(method, v);
         W32(kRenderState + rs * 4, v);  // titles read their states back from the library's table
     } else if (rs < gpu::kRsMax) {
         SetComplex(rs, v);
@@ -796,9 +804,11 @@ HLE_STDCALL(D3DDevice_SetTexture, 2) {
     std::lock_guard<std::recursive_mutex> lock(g_lock);
     uint32_t stage = a[0] & 3, tex = a[1];
     uint32_t old = Dev(kDevTextures + stage * 4);
-    AddRef(ctx, tex);
+    // bound again: the AddRef and Release would cancel out
+    bool same = tex == old;
+    if (!same) AddRef(ctx, tex);
     SetDev(kDevTextures + stage * 4, tex);
-    Release(ctx, old);
+    if (!same) Release(ctx, old);
     g_state.textures[stage] = tex;
     W32(kDirtyFlags, R32(kDirtyFlags) | XDK_DirtyFlags_Texture);
     return 0;
@@ -837,10 +847,11 @@ HLE_STDCALL(D3DDevice_SetStreamSource, 3) {
     std::lock_guard<std::recursive_mutex> lock(g_lock);
     uint32_t n = a[0] & 15, vb = a[1], stride = a[2];
     uint32_t old = R32(kStreams + n * kStreamSize + XDK_Stream_Buffer);
-    AddRef(ctx, vb);
+    bool same = vb == old;
+    if (!same) AddRef(ctx, vb);
     W32(kStreams + n * kStreamSize + XDK_Stream_Stride, stride);
     W32(kStreams + n * kStreamSize + XDK_Stream_Buffer, vb);
-    Release(ctx, old);
+    if (!same) Release(ctx, old);
     g_state.streams[n] = {vb, stride};
     return 0;
 }
@@ -850,11 +861,12 @@ HLE_STDCALL(D3DDevice_SetIndices, 2) {
     std::lock_guard<std::recursive_mutex> lock(g_lock);
     uint32_t ib = a[0];
     uint32_t old = Dev(kDevIndexBuffer);
-    AddRef(ctx, ib);
+    bool same = ib == old;
+    if (!same) AddRef(ctx, ib);
     W32(kIndexData, ib ? R32(ib + 4) : 0);
     SetDev(kDevIndexBuffer, ib);
     SetDev(kDevBaseVertex, a[1]);
-    Release(ctx, old);
+    if (!same) Release(ctx, old);
     g_state.index_buffer = ib;
     g_state.index_data = ib ? R32(ib + 4) : 0;
     g_state.base_vertex = a[1];
@@ -1134,23 +1146,22 @@ HLE_STDCALL(D3DDevice_SetPixelShader, 1) {
     }
     // the definition loads the combiner state like the XDK pushes it
     const uint32_t* d = g_state.ps->def;
-    auto put = [&](uint32_t method, uint32_t v) { g_state.simple[method >> 2] = v; };
     for (int i = 0; i < 8; i++) {
-        put(gpu::kMPsAlphaInputs + i * 4, d[0 + i]);
-        put(gpu::kMPsConstant0 + i * 4, d[10 + i]);
-        put(gpu::kMPsConstant1 + i * 4, d[18 + i]);
-        put(gpu::kMPsAlphaOutputs + i * 4, d[26 + i]);
-        put(gpu::kMPsRgbInputs + i * 4, d[34 + i]);
-        put(gpu::kMPsRgbOutputs + i * 4, d[45 + i]);
+        SetSimple(gpu::kMPsAlphaInputs + i * 4, d[0 + i]);
+        SetSimple(gpu::kMPsConstant0 + i * 4, d[10 + i]);
+        SetSimple(gpu::kMPsConstant1 + i * 4, d[18 + i]);
+        SetSimple(gpu::kMPsAlphaOutputs + i * 4, d[26 + i]);
+        SetSimple(gpu::kMPsRgbInputs + i * 4, d[34 + i]);
+        SetSimple(gpu::kMPsRgbOutputs + i * 4, d[45 + i]);
     }
-    put(gpu::kMPsFinalAbcd, d[8]);
-    put(gpu::kMPsFinalEfgh, d[9]);
-    put(gpu::kMPsCompareMode, d[42]);
-    put(gpu::kMPsFinalConstant0, d[43]);
-    put(gpu::kMPsFinalConstant1, d[44]);
-    put(gpu::kMPsCombinerCount, d[53]);
-    put(gpu::kMPsDotMapping, d[55]);
-    put(gpu::kMPsInputTexture, d[56]);
+    SetSimple(gpu::kMPsFinalAbcd, d[8]);
+    SetSimple(gpu::kMPsFinalEfgh, d[9]);
+    SetSimple(gpu::kMPsCompareMode, d[42]);
+    SetSimple(gpu::kMPsFinalConstant0, d[43]);
+    SetSimple(gpu::kMPsFinalConstant1, d[44]);
+    SetSimple(gpu::kMPsCombinerCount, d[53]);
+    SetSimple(gpu::kMPsDotMapping, d[55]);
+    SetSimple(gpu::kMPsInputTexture, d[56]);
     SetComplex(gpu::kRsPsTextureModes, d[54]);
     return 0;
 }
@@ -1160,6 +1171,7 @@ HLE_STDCALL(D3DDevice_SetPixelShaderConstant, 3) {
     uint32_t reg = a[0], src = a[1], n = a[2];
     for (uint32_t i = 0; i < n && reg + i < 16; i++) std::memcpy(g_state.psc[reg + i].data(), HostPtr(src + i * 16), 16);
     gpu::ApplyPixelConstants(g_state, reg, n);
+    gpu::MarkAllSimple();  // it writes the combiner constants into simple
     return 0;
 }
 
@@ -1241,7 +1253,7 @@ std::vector<float> g_im_vertices;       // every slot per vertex
 // at a physical address in the first 16 MB
 void ApplyVisibilityMethod(uint32_t m, uint32_t v) {
     constexpr uint32_t kReportAddressMask = 0xFFFFFF;
-    if (m == gpu::kMCountEnable) g_state.simple[gpu::kMCountEnable >> 2] = v;
+    if (m == gpu::kMCountEnable) SetSimple(gpu::kMCountEnable, v);
     if (!g_backend) return;
     if (m == gpu::kMClearReport) g_backend->ClearReport();
     if (m == gpu::kMGetReport) g_backend->GetReport(mem::VirtualFromPhysical(v & kReportAddressMask));
@@ -1435,7 +1447,7 @@ static void RunCommands(uint32_t begin, uint32_t end) {
             } else if ((m >= kArrayOffsets && m < kArrayFormatsEnd) || (m >= kArrayDraws && m < kInlineArray)) {
                 LOG_FIRST(16, "d3d: pushed commands draw from vertex arrays (method %04X), which is not run", m);
             } else if (!ApplyConstant(m, v) && !ApplyImmediate(m, v) && m >> 2 < g_state.simple.size()) {
-                g_state.simple[m >> 2] = v;
+                SetSimple(m, v);
             }
         }
     }
