@@ -1,4 +1,6 @@
 #include <algorithm>
+#include <chrono>
+#include <cmath>
 #include <initializer_list>
 
 #include "app/app.h"
@@ -179,4 +181,70 @@ X86_FUNC(sub_00082E00) {
     if (!input::KeyboardActive()) return __imp__sub_00082E00(ctx, base);
     G<uint8_t>(R32(ctx.ecx + kCharacterAim) + kAimLocked) = 0;
     kernel::Return(ctx, 0, 2);
+}
+
+// Underwater the player's sub (SUB_PHYSICS, its physics 0x644C0) steers by the mouse: the mouse pushes the left stick,
+// which falls back to the middle, so the sub turns across and up and down while the mouse moves. A remote torpedo
+// keeps the mouse for its camera.
+namespace {
+
+constexpr uint32_t kVehicleDriver = 0x2C8;  // 0 the player
+constexpr uint32_t kSubUpdates = 4;         // updates since the player's sub last ran its physics
+constexpr float kFullStickCounts = 100.0f;  // of the mouse, at sensitivity 1
+constexpr double kRecentreSeconds = 0.1;    // the stick falls back by 1/e
+constexpr float kStickFull = 32767.0f;
+
+struct SubStick {
+    float x = 0.0f;  // right positive
+    float y = 0.0f;  // up positive
+    bool seen = false;
+    uint32_t seen_update = 0;
+    std::chrono::steady_clock::time_point last;
+};
+
+SubStick g_sub;
+
+bool InPlayerSub() {
+    uint32_t player = R32(kPlayer);
+    bool recent = g_sub.seen && driving::UpdateCount() - g_sub.seen_update <= kSubUpdates;
+    return recent && player && !R32(player + kPlayerCamera) && !app::MenuOpen();
+}
+
+int16_t PushStick(int16_t keys, float mouse) {
+    return int16_t(std::clamp(float(keys) + mouse * kStickFull, -kStickFull, kStickFull));
+}
+
+}  // namespace
+
+// a sub's physics, thiscall
+X86_EXTERN_FUNC(__imp__sub_000644C0);
+X86_FUNC(sub_000644C0) {
+    if (R32(ctx.ecx + kVehicleDriver) == 0) {
+        g_sub.seen = true;
+        g_sub.seen_update = driving::UpdateCount();
+    }
+    __imp__sub_000644C0(ctx, base);
+}
+
+// keyboard.cpp, once its keys are on the pad
+void DrivingSubMouse(input::Pad& pad) {
+    auto now = std::chrono::steady_clock::now();
+    double seconds = std::chrono::duration<double>(now - g_sub.last).count();
+    g_sub.last = now;
+    if (!InPlayerSub()) {
+        g_sub.x = 0.0f;
+        g_sub.y = 0.0f;
+        return;
+    }
+    float fall = float(std::exp(-seconds / kRecentreSeconds));
+    g_sub.x *= fall;
+    g_sub.y *= fall;
+    float dx;
+    float dy;
+    if (input::TakeMouse(dx, dy)) {
+        g_sub.x = std::clamp(g_sub.x + dx / kFullStickCounts, -1.0f, 1.0f);
+        g_sub.y = std::clamp(g_sub.y - dy / kFullStickCounts, -1.0f, 1.0f);
+    }
+    pad.lx = PushStick(pad.lx, g_sub.x);
+    pad.ly = PushStick(pad.ly, g_sub.y);
 }

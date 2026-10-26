@@ -128,6 +128,8 @@ void PauseMouse(input::Pad& pad) {
 
 }  // namespace
 
+void DrivingSubMouse(input::Pad& pad);  // mouse.cpp
+
 void input::ImageKeys(Pad& pad) {
     PauseMouse(pad);
     int sticks[kAnalogChannel] = {};
@@ -142,6 +144,7 @@ void input::ImageKeys(Pad& pad) {
     int16_t* axes[kAnalogChannel] = {&pad.lx, &pad.ly, &pad.rx, &pad.ry};
     for (int i = 0; i < kAnalogChannel; i++)
         if (sticks[i]) *axes[i] = sticks[i] > 0 ? kFull : int16_t(-kFull);
+    DrivingSubMouse(pad);
     if (!Foreground()) return;
     for (int i = 0; i < 4; i++)
         if (Down(kDpadKeys[i])) pad.buttons |= uint16_t(1u << i);
