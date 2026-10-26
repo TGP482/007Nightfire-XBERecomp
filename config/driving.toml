@@ -746,6 +746,22 @@ call = "DrivingStepRate"
 at = 0x73600  # the turn toward its target, at most this much
 call = "DrivingEspCAmount"
 
+# AI guns, rockets and missiles or torpedoes count their refire in ticks (0x2E910, 0x2EB40, 0x2EE00)
+[[hook]]
+at = 0x2EAE5  # +0x1F6 countdown
+call = "DrivingTickless"
+on_true = 0x2EAFA
+
+[[hook]]
+at = 0x2EDE5  # +0x1FC countdown
+call = "DrivingTickless"
+on_true = 0x2EDFA
+
+[[hook]]
+at = 0x2F0C2  # +0x200 countdown
+call = "DrivingTickless"
+on_true = 0x2F0D7
+
 # player camera: runs once per update, its eases and steps per tick scale to it (src/driving/camera_steps.cpp)
 [[hook]]
 at = 0x877FE
