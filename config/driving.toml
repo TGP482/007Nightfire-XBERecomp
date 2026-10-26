@@ -549,6 +549,10 @@ call = "DrivingEsp4Factor"
 at = 0xAE814  # height sum
 call = "DrivingStepAmount"
 
+[[hook]]
+at = 0xAEED3  # two bodies overlapping push apart by this much a tick
+call = "DrivingEsp4Amount"
+
 # AI car (0x69710)
 [[hook]]
 at = 0x69882
