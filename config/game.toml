@@ -319,6 +319,11 @@ at = 0xB2341
 call = "AmmoNameStep"
 on_true = 0xB2349
 
+# a door with no open time opens in a second of console frames (src/game/doors.cpp)
+[[hook]]
+at = 0x2F6D9
+call = "DoorDefaultOpenTime"
+
 # a helicopter flies its path at its 60 fps speed (src/game/helicopter.cpp)
 [[hook]]
 at = 0x6BC68
