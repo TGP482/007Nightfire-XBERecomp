@@ -299,6 +299,81 @@ on_true = 0xDEBB8
 at = 0x96F76
 call = "DrivingFov"
 
+# real time updates: the audio clock and game time count whole console ticks (src/driving/frame_rate.cpp)
+[[hook]]
+at = 0x4DDD5
+call = "DrivingTickless"
+on_true = 0x4DDF2
+
+# ticks times the step (0x234E30) give seconds again (src/driving/tick_steps.cpp)
+[[hook]]
+at = 0x44415
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0x5F4D3
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0x5F589
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0x71AE6
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0x9D7F6
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0x9F6DD
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0xB70CC
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0xB7F3C
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0xB84F6
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0xBBC7D
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0xBBD67
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0xCE460
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0xD7050
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0xD7089
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0xE017C
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0xE3467
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0xE39F2
+call = "DrivingStepRate"
+
 # argument locations in API order for functions a link time code generated library compiled with another
 # convention: a register (eax ebx ecx edx esi edi ebp) or "stack" for the next stack slot, which the callee pops
 [abi]
