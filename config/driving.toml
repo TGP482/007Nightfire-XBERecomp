@@ -295,6 +295,11 @@ at = 0xDEA1C
 call = "DrivingTabStrip"
 on_true = 0xDEBB8
 
+# ambient occlusion once a view's opaque passes are drawn (src/driving/ambient_occlusion.cpp)
+[[hook]]
+at = 0x8D04A
+call = "DrivingAmbientOcclusion"
+
 # the frame rate counter, after the HUD draw's last flush (src/driving/fps_counter.cpp)
 [[hook]]
 at = 0xE1A75
