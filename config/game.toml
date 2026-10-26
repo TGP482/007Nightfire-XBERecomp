@@ -281,6 +281,12 @@ at = 0xADA5C
 call = "GadgetRecharge"
 on_true = 0xADB97
 
+# crouched and slowed walks settle at their 60 fps speed (src/game/movement.cpp)
+[[hook]]
+at = 0xAA024
+call = "WalkSpeed"
+on_true = 0xAA048
+
 # the mouse turns a guided missile (src/game/mouse.cpp)
 [[hook]]
 at = 0x23838
