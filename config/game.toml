@@ -344,6 +344,12 @@ call = "HelicopterGunCount"
 on_true = 0x6BE5E
 on_false = 0x6BD87
 
+# lasers wear a thrown bomb down at their 60 fps rate (src/game/bomb_damage.cpp)
+[[hook]]
+at = 0x22965
+call = "BombLaserDamage"
+on_true = 0x2298F
+
 # argument locations in API order for functions a link time code generated library compiled with another
 # convention: a register (eax ebx ecx edx esi edi ebp) or "stack" for the next stack slot, which the callee pops
 [abi]
