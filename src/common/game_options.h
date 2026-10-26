@@ -6,10 +6,10 @@
 struct X86Context;
 
 // The game's own options from its main menu, shown in the panel and the pause menu where they fit. Each image gives
-// its own: default.xbe's in src/game/game_options.cpp, Driving.xbe has none.
+// its own: default.xbe's in src/game/game_options.cpp, Driving.xbe's in src/driving/game_options.cpp.
 namespace game {
 
-enum class OptionKind { OnOff, HoldToggle, Volume };
+enum class OptionKind { OnOff, OffWhenSet, HoldToggle, Volume };  // OffWhenSet: the image keeps it as hidden
 enum class OptionPlace { Gameplay, General, Controller };  // the section of the panel it joins
 
 struct GameOption {
@@ -21,7 +21,7 @@ struct GameOption {
 
 const GameOption* GameOptions(size_t* count);
 inline std::atomic<bool> g_options_changed{false};  // a row changed one of them
-// game thread, each frame: once one changed and the panel is shut, the profile is saved as the image saves it
+// game thread, each frame: once one changed, default.xbe saves the profile with the panel shut, Driving.xbe passes it on
 void SaveChangedOptions(X86Context& ctx);
 
 }  // namespace game

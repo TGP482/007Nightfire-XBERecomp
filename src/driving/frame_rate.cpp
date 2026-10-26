@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cmath>
 
+#include "common/game_options.h"
 #include "driving/frame_rate.h"
 #include "xdk/hle.h"
 
@@ -105,6 +106,7 @@ X86_FUNC(sub_0005BA80) {
     if (rate > 0) G<float>(kStep) = float(g_time.update_ticks / rate);
     AddSchedulerTicks(updates);
     __imp__sub_0005BA80(ctx, base);
+    game::SaveChangedOptions(ctx);
 }
 
 // the game clock's update, thiscall: counts the console ticks real time crossed

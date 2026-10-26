@@ -630,6 +630,7 @@ std::string StepGameOption(const game::GameOption& option, int step) {
     uint8_t& value = kernel::G<uint8_t>(option.address);
     if (step) value = value ? 0 : 1;
     if (option.kind == game::OptionKind::HoldToggle) return value ? "TOGGLE" : "HOLD";
+    if (option.kind == game::OptionKind::OffWhenSet) return OnOff(value == 0);
     return OnOff(value != 0);
 }
 
