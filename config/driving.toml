@@ -295,6 +295,11 @@ at = 0xDEA1C
 call = "DrivingTabStrip"
 on_true = 0xDEBB8
 
+# a film's place and scale each frame, by the FMV scale setting (src/driving/film_scale.cpp)
+[[hook]]
+at = 0x130A18
+call = "DrivingFilmScale"
+
 # ambient occlusion once a view's opaque passes are drawn (src/driving/ambient_occlusion.cpp)
 [[hook]]
 at = 0x8D04A

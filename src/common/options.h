@@ -63,5 +63,6 @@ inline std::atomic<bool> g_hdr_display{false};  // the renderer's: the window's 
 inline std::atomic<bool> g_hud_hidden{false};  // the toggle HUD key's, not saved
 void WaitWhileUnfocused();  // focus_pause.cpp: game thread, before the present
 uint64_t GuestTicks();  // focus_pause.cpp: rdtsc ticks less the focus pauses, held while one lasts
+bool FocusPaused();     // focus_pause.cpp: a focus pause holds the game
 
 }  // namespace game

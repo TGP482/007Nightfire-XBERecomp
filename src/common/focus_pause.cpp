@@ -62,4 +62,9 @@ uint64_t GuestTicks() {
     return now - g_paused_ticks;
 }
 
+bool FocusPaused() {
+    std::lock_guard<std::mutex> lock(g_clock_lock);
+    return g_pause_start != 0;
+}
+
 }  // namespace game
