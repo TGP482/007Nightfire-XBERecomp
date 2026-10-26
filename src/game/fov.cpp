@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "common/options.h"
+#include "d3d/occlusion.h"
 #include "kernel/memory.h"
 #include "xdk/hle.h"
 
@@ -280,8 +281,14 @@ void DrawModel(X86Context& ctx, uint8_t* base, GuestFn original) {
 
 }  // namespace
 
+// an actor's render, every character: also kept out of ambient occlusion so their low poly corners stay lit
 X86_EXTERN_FUNC(__imp__sub_00016C20);
-X86_FUNC(sub_00016C20) { DrawModel(ctx, base, __imp__sub_00016C20); }
+X86_FUNC(sub_00016C20) {
+    bool marked = game::Opt().ambient_occlusion != 0;
+    if (marked) d3d::MarkCharacters(true);
+    DrawModel(ctx, base, __imp__sub_00016C20);
+    if (marked) d3d::MarkCharacters(false);
+}
 
 X86_EXTERN_FUNC(__imp__sub_000DA750);
 X86_FUNC(sub_000DA750) { DrawModel(ctx, base, __imp__sub_000DA750); }
