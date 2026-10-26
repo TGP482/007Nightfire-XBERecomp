@@ -1,3 +1,6 @@
+#include <algorithm>
+#include <initializer_list>
+
 #include "app/app.h"
 #include "common/gyro.h"
 #include "common/menu.h"
@@ -36,6 +39,14 @@ constexpr uint32_t kCharacterFov = 0xB4;
 constexpr float kUnzoomedFov = 33.0f;
 constexpr uint32_t kCharacterAim = 0x354;  // its input: +0xB set while 0x82E00 keeps the sight on a target
 constexpr uint32_t kAimLocked = 0xB;
+constexpr uint32_t kAiming = 0xC;  // byte in its input, set by 0x8A310 while the player aims
+// the aim's sight, turns from the view's middle, which 0x857D0 moves within its dead zone and draws (+0x1D0, +0x1D4)
+constexpr uint32_t kCharacterSightPitch = 0x1E0;
+constexpr uint32_t kCharacterSightYaw = 0x1E4;
+// the camera type's record (0x973C0, thiscall): the dead zone, turns on the unzoomed view
+constexpr uint32_t kCameraRecord = 0x973C0;
+constexpr uint32_t kDeadZonePitch = 0x40;
+constexpr uint32_t kDeadZoneYaw = 0x44;
 
 // the angles are whole turns: the rotations (0x116C70, 0x7A1E0) take the sine of 2 pi times them
 constexpr float kTurnsPerDegree = 1.0f / 360.0f;
@@ -60,6 +71,35 @@ LookTurn GyroTurn() {
     if (app::MenuOpen()) return {};
     float yaw = o.invert_pad_x ? -turn.yaw : turn.yaw;
     return {-yaw * kTurnsPerDegree, turn.pitch * kTurnsPerDegree};
+}
+
+uint32_t CameraRecord(X86Context& ctx, uint32_t character) {
+    uint32_t ecx = ctx.ecx;
+    ctx.ecx = character;
+    uint32_t record = kernel::CallGuest(ctx, kCameraRecord, std::initializer_list<uint32_t>{});
+    ctx.ecx = ecx;
+    return record;
+}
+
+// the value moved by step within its reach; what is left over
+float StepWithin(float& value, float step, float reach) {
+    float moved = std::clamp(value + step, -reach, reach);
+    float rest = value + step - moved;
+    value = moved;
+    return rest;
+}
+
+// while aiming the mouse moves the sight, and past the dead zone the view turns by the rest, as the sticks turn it
+LookTurn MoveSight(X86Context& ctx, uint32_t character, LookTurn mouse, float zoom) {
+    const game::Options& o = game::Opt();
+    uint32_t record = CameraRecord(ctx, character);
+    float& yaw = G<float>(character + kCharacterSightYaw);
+    float& pitch = G<float>(character + kCharacterSightPitch);
+    float across = mouse.across * o.aim_horizontal_sensitivity * zoom;
+    float up_down = mouse.up_down * o.aim_vertical_sensitivity * zoom;
+    float rest_across = StepWithin(yaw, across, G<float>(record + kDeadZoneYaw) * zoom);
+    float rest_up_down = StepWithin(pitch, up_down, G<float>(record + kDeadZonePitch) * zoom);
+    return {rest_across / zoom, rest_up_down / zoom};
 }
 
 // the camera's rate and turn on one axis for the update, put back after it
@@ -88,10 +128,13 @@ void RestoreAxis(const Axis& axis) {
 X86_EXTERN_FUNC(__imp__sub_000857D0);
 X86_FUNC(sub_000857D0) {
     uint32_t character = ctx.ecx;
-    if (R32(character + kCharacterInput)) {
+    uint32_t input = R32(character + kCharacterInput);
+    if (input) {
         LookTurn mouse = MouseTurn();
         LookTurn gyro = GyroTurn();
         float zoom = G<float>(character + kCharacterFov) / kUnzoomedFov;
+        bool moved = mouse.across != 0.0f || mouse.up_down != 0.0f;
+        if (moved && G<uint8_t>(input + kAiming)) mouse = MoveSight(ctx, character, mouse, zoom);
         G<float>(character + kCharacterYaw) += (mouse.across + gyro.across) * zoom;
         G<float>(character + kCharacterPitch) += (mouse.up_down + gyro.up_down) * zoom;
     }

@@ -17,6 +17,11 @@ constexpr uint16_t kGuiding = 10;        // steering a guided missile, which 0x2
 constexpr uint32_t kPlayerWeapon = 0xB8;
 constexpr uint32_t kWeaponFlags = 0x50;  // bit 0 set by the manual aim button, 0xBA8F0
 constexpr uint8_t kManualAim = 1;
+constexpr uint32_t kWeaponRecord = 0x52;  // byte: its record, 0x18CFA0 on, 0x10C apart
+constexpr uint32_t kRecords = 0x18CFA0;
+constexpr uint32_t kRecordSize = 0x10C;
+constexpr uint32_t kRecordFlags = 0x68;
+constexpr uint8_t kSightStays = 0x40;  // manual aim keeps the sight in the middle and looks instead
 constexpr uint32_t kPlayerController = 0xBC;
 constexpr uint32_t kControllerPlayer = 0x8DE;
 constexpr int8_t kPlayer1 = 0;  // the gyro turns this player alone
@@ -27,6 +32,14 @@ constexpr uint32_t kControllerYawStep = 0x28;
 constexpr uint32_t kControllerPitch = 0x838;
 constexpr uint32_t kControllerZoom = 0x860;  // the view's magnification, 1 unzoomed; the stick's look divides by it
 constexpr uint32_t kControllerLooking = 0xF0;  // set while the stick moves the view up or down
+// manual aim's sight on the view, right and up positive, which the sticks move (0xB764E) up to its reach and the
+// sight's pull (0xB9950) eases the drawn one towards
+constexpr uint32_t kControllerSightX = 0xD8;
+constexpr uint32_t kControllerSightY = 0xDC;
+constexpr uint32_t kControllerShownX = 0xE0;
+constexpr uint32_t kControllerShownY = 0xE4;
+constexpr uint32_t kSightReachX = 0x161B40;  // 0.296
+constexpr uint32_t kSightReachY = 0x15D590;  // 0.4
 
 constexpr float kRadiansPerDegree = 0.017453292f;
 constexpr float kRadiansPerCount = 0.04f * kRadiansPerDegree;  // at sensitivity 1, as the other recomps
@@ -61,10 +74,38 @@ float g_missile_dy = 0.0f;
 
 bool Looks(uint16_t state) { return state < 8 || (state > 12 && state != 16); }
 
+bool ManualAim(uint32_t player) {
+    return G<uint8_t>(kernel::R32(player + kPlayerWeapon) + kWeaponFlags) & kManualAim;
+}
+
+// manual aim with a weapon whose sight moves
+bool SightMoves(uint32_t player) {
+    if (!ManualAim(player)) return false;
+    int8_t index = G<int8_t>(kernel::R32(player + kPlayerWeapon) + kWeaponRecord);
+    uint32_t record = kRecords + uint32_t(index) * kRecordSize;
+    return !(G<uint8_t>(record + kRecordFlags) & kSightStays);
+}
+
 // in manual aim or zoomed in
 bool Aiming(uint32_t player, uint32_t controller) {
-    bool manual = G<uint8_t>(kernel::R32(player + kPlayerWeapon) + kWeaponFlags) & kManualAim;
-    return manual || G<float>(controller + kControllerZoom) > 1.0f;
+    return ManualAim(player) || G<float>(controller + kControllerZoom) > 1.0f;
+}
+
+// the value moved by step within its reach; what is left over
+float StepWithin(float& value, float step, float reach) {
+    float moved = std::clamp(value + step, -reach, reach);
+    float rest = value + step - moved;
+    value = moved;
+    return rest;
+}
+
+// the sight moves by the mouse, and past its reach the view turns by the rest, as the sticks turn it at the edge
+void MoveSight(uint32_t controller, float across, float up) {
+    float turn_across = StepWithin(G<float>(controller + kControllerSightX), across, G<float>(kSightReachX));
+    float turn_up = StepWithin(G<float>(controller + kControllerSightY), up, G<float>(kSightReachY));
+    G<float>(controller + kControllerYawStep) -= turn_across;
+    G<float>(controller + kControllerPitch) += turn_up * kQuarterTurnsPerRadian;
+    if (turn_up != 0.0f) G<uint8_t>(controller + kControllerLooking) = 1;
 }
 
 // the look adds the stick's pitch to the pitch the frame started with
@@ -100,6 +141,10 @@ void MouseLook(uint32_t player, uint32_t controller, bool aim) {
         dy *= game::Opt().aim_vertical_sensitivity;
     }
     float per_count = kRadiansPerCount / std::max(G<float>(controller + kControllerZoom), 1.0f);
+    if (SightMoves(player)) {
+        MoveSight(controller, dx * per_count, -dy * per_count);
+        return;
+    }
     G<float>(controller + kControllerYawStep) -= dx * per_count;
     G<float>(controller + kControllerPitch) -= dy * per_count * kQuarterTurnsPerRadian;
     if (dy != 0.0f) G<uint8_t>(controller + kControllerLooking) = 1;
@@ -138,10 +183,11 @@ X86_FUNC(sub_000B7610) {
 }
 
 // the sight's pull onto targets each frame (player): the mouse aims for itself, so on the keyboard and mouse it runs
-// as with Auto Aim off, whatever the setting
+// as with Auto Aim off, whatever the setting, and the drawn sight is where the mouse put it
 X86_EXTERN_FUNC(__imp__sub_000B9950);
 X86_FUNC(sub_000B9950) {
-    uint32_t controller = kernel::R32(kernel::R32(ctx.esp + 4) + kPlayerController);
+    uint32_t player_object = kernel::R32(ctx.esp + 4);
+    uint32_t controller = kernel::R32(player_object + kPlayerController);
     int player = G<int8_t>(controller + kControllerPlayer);
     if (player != input::KeyboardPlayer() || !input::KeyboardActive()) {
         __imp__sub_000B9950(ctx, base);
@@ -152,6 +198,9 @@ X86_FUNC(sub_000B9950) {
     for (size_t i = 0; i < std::size(kAutoAim); i++) setting[i] = std::exchange(G<uint8_t>(kAutoAim[i] + own), 0);
     __imp__sub_000B9950(ctx, base);
     for (size_t i = 0; i < std::size(kAutoAim); i++) G<uint8_t>(kAutoAim[i] + own) = setting[i];
+    if (!SightMoves(player_object)) return;
+    G<float>(controller + kControllerShownX) = G<float>(controller + kControllerSightX);
+    G<float>(controller + kControllerShownY) = G<float>(controller + kControllerSightY);
 }
 
 // a turret's frame (turret): the mouse aims it beside the sticks, before the frame clamps the aim
