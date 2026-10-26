@@ -8,8 +8,8 @@
 #include "kernel/memory.h"
 #include "xdk/hle.h"
 
-// The frame rate, top left, and the main menu watermark, in the game's own text font: drawn as the HUD's text items
-// are (0xD9410), just before the game presents the frame.
+// The frame rate, top left, in the menus' font and the main menu watermark in the game's text font: drawn as the HUD's
+// text items are (0xD9410), just before the game presents the frame.
 namespace {
 
 using kernel::G;
@@ -31,11 +31,15 @@ constexpr uint32_t kAmbient = 0xDDF00;
 constexpr uint32_t kLightMode = 0xDD930;
 constexpr uint32_t kLights = 0xDE610;
 
-// 0xFF then a font from the table at 0x17BD90: 1 is the default text font, 13 lines high
-constexpr char kStyle[] = "\xFF\x01";
+// 0xFF then a font from the table at 0x17BD90: 1 is the default text font, 13 lines high; 2 the menus', the style
+// a menu widget is made with (0x712E5)
+constexpr char kTextStyle[] = "\xFF\x01";
+constexpr char kMenuStyle[] = "\xFF\x02";
+static_assert(sizeof(kTextStyle) == sizeof(kMenuStyle));
 constexpr float kLineHeight = 13;
 constexpr float kFrameWidth = 640;
 constexpr float kMargin = 8;  // as the other recomps, on the frame 480 high
+constexpr float kFpsSize = 12;  // SCDA's counter: 12 high, its baseline 8 + 12 down
 constexpr float kNarrow = 0.75f;  // a 4:3 glyph on the frame shown 16:9
 constexpr uint32_t kWhite = 0xFFFFFFFF;
 constexpr uint32_t kBlack = 0x000000FF;
@@ -63,11 +67,20 @@ struct Line {
     uint32_t flags;
 };
 
-// the text into guest memory with the style and scale; its length
-uint32_t Stage(uint32_t scratch, const char* text) {
-    for (uint32_t i = 0; i < sizeof(kStyle); i++) G<char>(scratch + i) = kStyle[i];
-    G<float>(scratch + kScaleAt) = Wide();
-    G<float>(scratch + kScaleAt + 4) = 1.0f;
+struct Size {
+    float width;
+    float height;
+};
+
+void SetScale(uint32_t scratch, float scale) {
+    G<float>(scratch + kScaleAt) = scale * Wide();
+    G<float>(scratch + kScaleAt + 4) = scale;
+}
+
+// the text into guest memory with the style and scale 1; its length
+uint32_t Stage(uint32_t scratch, const char* style, const char* text) {
+    for (uint32_t i = 0; i < sizeof(kMenuStyle); i++) G<char>(scratch + i) = style[i];
+    SetScale(scratch, 1.0f);
     uint32_t length = 0;
     while (text[length] && kTextAt + length + 1 < kScratchSize) {
         G<char>(scratch + kTextAt + length) = text[length];
@@ -77,14 +90,15 @@ uint32_t Stage(uint32_t scratch, const char* text) {
     return length;
 }
 
-// the width when flags is kMeasureOnly
-float Text(X86Context& ctx, uint32_t scratch, uint32_t length, const Line& line) {
+// the size when flags is kMeasureOnly
+Size Text(X86Context& ctx, uint32_t scratch, uint32_t length, const Line& line) {
     uint32_t text = scratch + kTextAt;
     uint32_t scale = scratch + kScaleAt;
     uint32_t size = kernel::CallGuest(ctx, kText,
                                       {Bits(line.x), Bits(line.y), line.colour, line.shadow, kUnused, text, scratch,
                                        scale, line.flags, length, Bits(0)});
-    return size ? G<float>(size) : 0.0f;
+    if (!size) return {};
+    return {G<float>(size), G<float>(size + 4)};
 }
 
 void BeginText(X86Context& ctx) {
@@ -101,16 +115,18 @@ void EndText(X86Context& ctx) {
 void DrawFps(X86Context& ctx, uint32_t scratch) {
     char line[kScratchSize - kTextAt];
     std::snprintf(line, sizeof(line), "FPS: %.1f", double(game::g_fps.load()));
-    uint32_t length = Stage(scratch, line);
-    Text(ctx, scratch, length, {kMargin * Wide(), kMargin + kLineHeight, kWhite, kBlack, kDropShadow});
+    uint32_t length = Stage(scratch, kMenuStyle, line);
+    float height = Text(ctx, scratch, length, {0, 0, kWhite, kBlack, kMeasureOnly}).height;
+    if (height > 0) SetScale(scratch, kFpsSize / height);
+    Text(ctx, scratch, length, {kMargin * Wide(), kMargin + kFpsSize, kWhite, kBlack, kDropShadow});
 }
 
 // right aligned on the legend's row, grey without a shadow; it moves with the page
 void DrawWatermark(X86Context& ctx, uint32_t scratch, const game::LegendRow& legend) {
-    uint32_t length = Stage(scratch, kWatermark);
+    uint32_t length = Stage(scratch, kTextStyle, kWatermark);
     float right = kFrameWidth - kWatermarkRight * Wide() + legend.left * Wide();
     float baseline = legend.top + (legend.height + kLineHeight) / 2;
-    float width = Text(ctx, scratch, length, {0, 0, kGrey, kGrey, kMeasureOnly});
+    float width = Text(ctx, scratch, length, {0, 0, kGrey, kGrey, kMeasureOnly}).width;
     static bool logged = false;
     if (!logged) LOGR("watermark: x %.1f baseline %.1f width %.1f", double(right - width), double(baseline), double(width));
     logged = true;
