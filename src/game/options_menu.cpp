@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "common/menu.h"
@@ -29,6 +30,8 @@ constexpr uint32_t kScoreTab = 4;
 constexpr uint32_t kList = 8;          // the two column list
 constexpr uint32_t kRecompTab = 0x11;  // past the stock subs, 0 to 0x10
 constexpr uint32_t kLegendId = 0x1000006F;  // the bar under the page, its buttons' legend
+// the legends OBJECTIVES and SCORE put in the bar as they take the focus (0x80590)
+constexpr uint32_t kStockLegends[] = {0x1000218, 0x100021B};
 constexpr int16_t kTabGap = 10;  // as 0x80030 lays out the multiplayer tabs
 constexpr uint32_t kTabs[] = {0, 1, 3, kScoreTab, kRecompTab};  // left to right; sub 2 is no tab
 
@@ -156,6 +159,7 @@ struct Tab {
     uint32_t pressed_frame = UINT32_MAX;  // A comes from the tab and the list both: one press an update
     std::vector<std::string> values;  // the lines' values as the list shows them
     std::string legend;  // as the bar shows it
+    std::vector<std::string> stock_parts;  // the stock legends' "~V Scroll" like parts for other buttons
 };
 Tab g_tab;
 
@@ -273,13 +277,52 @@ void LayOutTabs(X86Context& ctx, uint32_t player, bool latch) {
          double(g_tab.strip_right), double(labels), double(gap));
 }
 
-// in the game's legend form, "~" and a button; prompts.cpp names the keys
+// A legend is parts two spaces apart, each "~" and a button then its label; prompts.cpp names the keys.
+
+constexpr char kPartGap[] = "  ";
+
+bool OwnButton(char code) { return code == 'A' || code == 'B' || code == 'S'; }
+
+void AddStockParts(std::vector<std::string>& parts, std::string_view text) {
+    for (size_t at = 0; at < text.size();) {
+        size_t end = std::min(text.find(kPartGap, at), text.size());
+        std::string_view part = text.substr(at, end - at);
+        at = end + 2;
+        if (part.size() < 2 || part[0] != '~' || OwnButton(part[1])) continue;
+        auto same = [&](const std::string& p) { return p[1] == part[1]; };
+        if (std::none_of(parts.begin(), parts.end(), same)) parts.emplace_back(part);
+    }
+}
+
+void LatchStockParts(X86Context& ctx) {
+    g_tab.stock_parts.clear();
+    for (uint32_t id : kStockLegends) {
+        uint32_t text = kernel::CallGuest(ctx, kStringText, {id, 0, 0});
+        if (!text) continue;
+        const char* host = static_cast<const char*>(kernel::HostPtr(text));
+        std::string_view legend(host, strnlen(host, kMaxText));
+        AddStockParts(g_tab.stock_parts, legend);
+        static int logged = 0;
+        if (logged++ < 2) LOGR("pause: stock legend %08X \"%.*s\"", id, int(legend.size()), legend.data());
+    }
+}
+
+// first, the stock parts, then last; on the rows left and right change a value, so no part of theirs
+std::string JoinLegend(const char* first, const char* last, bool rows) {
+    std::string legend = first;
+    for (const std::string& part : g_tab.stock_parts) {
+        if (rows && part[1] == 'H') continue;
+        legend += kPartGap + part;
+    }
+    return legend + kPartGap + last;
+}
+
 std::string Legend(const Row* selected) {
-    if (g_tab.pages.level() == Level::Categories) return "~A Select  ~S Resume";
-    if (g_tab.pages.level() == Level::Sections) return "~A Select  ~B Back";
+    if (g_tab.pages.level() == Level::Categories) return JoinLegend("~A Select", "~S Continue", false);
+    if (g_tab.pages.level() == Level::Sections) return JoinLegend("~A Select", "~B Back", false);
     if (app::Capturing()) return "Press a key or mouse button to bind, Escape cancels";
-    if (selected && selected->kind == Kind::Bind) return "~A Change key  ~B Back";
-    return "~H Change  ~B Back";
+    if (selected && selected->kind == Kind::Bind) return JoinLegend("~A Change key", "~B Back", true);
+    return JoinLegend("~H Change", "~B Back", true);
 }
 
 // Showing the page.
@@ -350,6 +393,7 @@ void OpenTab(X86Context& ctx, uint32_t player, uint32_t page) {
         g_tab.stock_nav = R32(page + kPageNav);
     }
     g_tab.pages.Open();
+    LatchStockParts(ctx);
     LayOutTabs(ctx, player, fresh);
     uint32_t focus = R32(page + kPageFocus);
     bool focused = focus && R32(focus + kId) == kPauseWidgets && R32(focus + kSub) == kRecompTab;
