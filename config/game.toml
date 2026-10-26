@@ -319,6 +319,13 @@ at = 0xB2341
 call = "AmmoNameStep"
 on_true = 0xB2349
 
+# a helicopter flies its path at its 60 fps speed (src/game/helicopter.cpp)
+[[hook]]
+at = 0x6BC68
+call = "HelicopterPathStep"
+on_true = 0x6BC7C
+on_false = 0x6BC8F
+
 # argument locations in API order for functions a link time code generated library compiled with another
 # convention: a register (eax ebx ecx edx esi edi ebp) or "stack" for the next stack slot, which the callee pops
 [abi]
