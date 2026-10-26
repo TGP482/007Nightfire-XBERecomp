@@ -374,6 +374,264 @@ call = "DrivingStepRate"
 at = 0xE39F2
 call = "DrivingStepRate"
 
+# cars: per tick counts run on whole ticks, per tick steps scale to the update (src/driving/vehicle_steps.cpp)
+[[hook]]
+at = 0x6A882  # +0x29D countdown
+call = "DrivingTickless"
+on_true = 0x6A88A
+
+[[hook]]
+at = 0x6A898  # +0x374 countdown
+call = "DrivingTickless"
+on_true = 0x6A8A0
+
+[[hook]]
+at = 0x6A944  # +0x398 countdown
+call = "DrivingTickless"
+on_true = 0x6A94B
+
+[[hook]]
+at = 0x6A9DE  # +0x3AC tick count, player
+call = "DrivingTickless"
+on_true = 0x6AA4B
+
+[[hook]]
+at = 0x6AA2F  # follows the body's velocity by a share per tick
+call = "DrivingEsp24Ease"
+
+[[hook]]
+at = 0x6AC52  # +0x3AC tick count, type 1
+call = "DrivingTickless"
+on_true = 0x6AD14
+
+[[hook]]
+at = 0x6AC8A  # +0x3AC tick count, others
+call = "DrivingTickless"
+on_true = 0x6AC9C
+
+[[hook]]
+at = 0x6ACD3  # damage per tick while it counts
+call = "DrivingTickless"
+on_true = 0x6AD14
+
+# player car (0x67BD0)
+[[hook]]
+at = 0x67DC3  # +0x29A count
+call = "DrivingTickless"
+on_true = 0x67DCB
+
+[[hook]]
+at = 0x68270  # +0x294 countdown
+call = "DrivingTickless"
+on_true = 0x68271
+
+[[hook]]
+at = 0x685CE  # spin impulse
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x68D4A  # wheel phase
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x68D6C
+call = "DrivingWheelTurn"
+
+[[hook]]
+at = 0x68D80
+call = "DrivingWheelTurn"
+
+[[hook]]
+at = 0x68D96  # wheel phase
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x68F28  # +0x3FD countdown
+call = "DrivingTickless"
+on_true = 0x68F30
+
+[[hook]]
+at = 0x69067  # +0x2DB count
+call = "DrivingTickless"
+on_true = 0x6906F
+
+[[hook]]
+at = 0x69079  # +0x2D7 countdown
+call = "DrivingTickless"
+on_true = 0x69081
+
+[[hook]]
+at = 0x6849C
+call = "DrivingWheelSpinBrake"
+
+[[hook]]
+at = 0x684AA
+call = "DrivingWheelSpinCoast"
+
+[[hook]]
+at = 0x6731A  # damper: depth change per tick
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0x68BFE  # tire effect each tick
+call = "DrivingTickless"
+on_true = 0x68D17
+
+# standing back up (0x62FE0)
+[[hook]]
+at = 0x6323A
+call = "DrivingCarUprightEase"
+
+[[hook]]
+at = 0x63280  # spin impulse 0.8
+call = "DrivingEsp4Amount"
+
+# spin control (0x66C90)
+[[hook]]
+at = 0x66E30  # 0.05 of the spin
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x66E66
+call = "DrivingEsp0VectorAmount"
+
+[[hook]]
+at = 0x66EB4
+call = "DrivingEsp0VectorAmount"
+
+# rigid bodies
+[[hook]]
+at = 0xADEAA  # +0x4DE ticks since reset
+call = "DrivingTickless"
+on_true = 0xADEB2
+
+[[hook]]
+at = 0xAE124  # resting friction
+call = "DrivingEsp4Ease"
+
+[[hook]]
+at = 0xAD143  # spin drag 0.995
+call = "DrivingStepFactor"
+
+[[hook]]
+at = 0xAD14F
+call = "DrivingStepFactor"
+
+[[hook]]
+at = 0xAD15B
+call = "DrivingStepFactor"
+
+[[hook]]
+at = 0xB1F99  # debris velocity 0.99
+call = "DrivingEsp4Factor"
+
+[[hook]]
+at = 0xB1FA8  # debris spin 0.98
+call = "DrivingEsp4Factor"
+
+[[hook]]
+at = 0xAE814  # height sum
+call = "DrivingStepAmount"
+
+# AI car (0x69710)
+[[hook]]
+at = 0x69882
+call = "DrivingWobbleSlow"
+
+[[hook]]
+at = 0x698B1
+call = "DrivingWobbleFast"
+
+[[hook]]
+at = 0x69BAB
+call = "DrivingWheelSpinCoast"
+
+[[hook]]
+at = 0x6A150  # +0x3FD countdown
+call = "DrivingTickless"
+on_true = 0x6A152
+
+[[hook]]
+at = 0x6A1BB  # +0x2DB count
+call = "DrivingTickless"
+on_true = 0x6A1C3
+
+[[hook]]
+at = 0x6A1C9  # wheel phase
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x6A1DB
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x6A2FE  # tire effect each tick
+call = "DrivingTickless"
+on_true = 0x6A40B
+
+[[hook]]
+at = 0x6924B  # damper
+call = "DrivingStepRate"
+
+# other cars (0x63AD0)
+[[hook]]
+at = 0x6419C  # +0x2DB count
+call = "DrivingTickless"
+on_true = 0x641A4
+
+[[hook]]
+at = 0x64219  # tire effect each tick
+call = "DrivingTickless"
+on_true = 0x64319
+
+[[hook]]
+at = 0x64346  # wheel phase
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x63420  # damper
+call = "DrivingStepRate"
+
+# hovering cars (0x644C0)
+[[hook]]
+at = 0x64554  # +0x29A count
+call = "DrivingTickless"
+on_true = 0x64556
+
+[[hook]]
+at = 0x64829  # +0x294 countdown
+call = "DrivingTickless"
+on_true = 0x6482A
+
+[[hook]]
+at = 0x653B4
+call = "DrivingWobbleSlow"
+
+[[hook]]
+at = 0x653E3
+call = "DrivingWobbleFast"
+
+[[hook]]
+at = 0x65540  # wall push cancels the speed within a tick
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0x65728
+call = "DrivingEsp0VectorAmount"
+
+[[hook]]
+at = 0x658A3  # carried car's wheel phase
+call = "DrivingStepAmount"
+
+# flying vehicle (0x6DD30)
+[[hook]]
+at = 0x6E0BB
+call = "DrivingPlaneBankEase"
+
+[[hook]]
+at = 0x6E0F9
+call = "DrivingPlaneBankEase"
+
 # argument locations in API order for functions a link time code generated library compiled with another
 # convention: a register (eax ebx ecx edx esi edi ebp) or "stack" for the next stack slot, which the callee pops
 [abi]
