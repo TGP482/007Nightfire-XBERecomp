@@ -295,7 +295,11 @@ at = 0xDEA1C
 call = "DrivingTabStrip"
 on_true = 0xDEBB8
 
-# a film's place and scale each frame, by the FMV scale setting (src/driving/film_scale.cpp)
+# a film's scale, then its place and scale each frame by the FMV scale setting (src/driving/film_scale.cpp)
+[[hook]]
+at = 0x1309BC
+call = "DrivingFilmScaleLatch"
+
 [[hook]]
 at = 0x130A18
 call = "DrivingFilmScale"
