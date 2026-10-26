@@ -349,6 +349,30 @@ call = "HelicopterGunCount"
 on_true = 0x6BE5E
 on_false = 0x6BD87
 
+# triggered scenery animations play at their 60 fps speed (src/game/scenery_animations.cpp)
+[[hook]]
+at = 0x6C7B4
+call = "TriggeredAnimationStep"
+on_true = 0x6C7B9
+
+# debris shards fade and spin at their 60 fps speed (src/game/debris.cpp)
+[[hook]]
+at = 0xCD010
+call = "DebrisFade"
+on_true = 0xCD03D
+on_false = 0xCD093
+
+[[hook]]
+at = 0xCD077
+call = "DebrisSpin"
+on_true = 0xCD088
+
+# particles fade at their 60 fps speed (src/game/particles.cpp)
+[[hook]]
+at = 0xCD8BB
+call = "ParticleColourStep"
+on_true = 0xCD8DF
+
 # lasers wear a thrown bomb down at their 60 fps rate (src/game/bomb_damage.cpp)
 [[hook]]
 at = 0x22965
