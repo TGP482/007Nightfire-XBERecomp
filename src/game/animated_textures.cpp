@@ -37,6 +37,18 @@ void UpdateTextureTime() {
     g_time.last = now;
 }
 
+// true when a 60 Hz picture is due, the next then due a period later
+bool FilmPictureDue() {
+    constexpr std::chrono::duration<double> kSeconds{1.0 / kConsoleRate};
+    constexpr auto kPeriod = std::chrono::duration_cast<Clock::duration>(kSeconds);
+    static Clock::time_point next;
+    Clock::time_point now = Clock::now();
+    if (now < next) return false;
+    next += kPeriod;
+    if (next <= now) next = now + kPeriod;
+    return true;
+}
+
 }  // namespace
 
 game::TextureClock::TextureClock() {
@@ -70,8 +82,13 @@ X86_FUNC(sub_000DF9F0) {
     __imp__sub_000DF9F0(ctx, base);
 }
 
+// the pause page's fire film decodes its next picture into texture 0x30000DB on every call, once a frame
 X86_EXTERN_FUNC(__imp__sub_000E0020);
 X86_FUNC(sub_000E0020) {
+    if (!FilmPictureDue()) {
+        kernel::Return(ctx, 0, 0);
+        return;
+    }
     game::TextureClock clock;
     __imp__sub_000E0020(ctx, base);
 }
