@@ -16,6 +16,7 @@ constexpr uint32_t kPlayers = 4;
 // byte: the controller port 0xDE720 reads the block from. The front end's menus set ports 0 to 3 in order, single
 // player puts the port that last used them in player 1's (0x7CD50), multiplayer moves each joined port's block up.
 constexpr uint32_t kBlockPort = 0x142;
+constexpr uint8_t kHeld = 1;
 constexpr uint8_t kPressed = 4;
 constexpr int64_t kMenuMs = 250;  // a menu reads its keys each frame it is up
 std::atomic<int64_t> g_menu_ms{0};  // the last read
@@ -33,6 +34,9 @@ constexpr uint32_t kStart = 30;
 constexpr uint32_t kReloadAction = 14;
 constexpr uint32_t kReloadRead = 0xBBB8C;  // the return address of 0xBB300's read
 constexpr uint32_t kControllerPlayer = 0x8DE;  // in the controller 0xB86B0 gets in eax
+// the game took this frame's press of the value (0x6CB10), as mounting and leaving a turret do so the press does
+// nothing more; the keys' press goes with it
+bool g_press_taken = false;
 
 int64_t NowMs() {
     auto since = std::chrono::steady_clock::now().time_since_epoch();
@@ -70,6 +74,7 @@ X86_FUNC(sub_00072E20) {
 X86_EXTERN_FUNC(__imp__sub_000DE720);
 X86_FUNC(sub_000DE720) {
     __imp__sub_000DE720(ctx, base);
+    g_press_taken = false;
     input::SetMenu(MenuUp());
     float keys[input::kActionValues] = {};
     input::Keyboard(keys, NowMs() - g_menu_ms < kMenuMs && !StartCloses());
@@ -90,6 +95,7 @@ X86_FUNC(sub_0006C9A0) {
     if (value != kReloadAction || player != input::KeyboardPlayer()) return;
     uint8_t keys = input::ActionKey();
     if (read == kReloadRead) keys |= input::ReloadKey();
+    if (g_press_taken) keys &= kHeld;
     if (keys & bits) ctx.eax = (ctx.eax & 0xFFFF0000u) | 1;
 }
 
@@ -111,4 +117,14 @@ X86_FUNC(sub_000B86B0) {
         __imp__sub_000B86B0(ctx, base);
         ctx.eax = (ctx.eax & 0xFFFFFF00u) | 1;
     }
+}
+
+// a value's state set by the game (player or -1 for all, value, state bits)
+X86_EXTERN_FUNC(__imp__sub_0006CB10);
+X86_FUNC(sub_0006CB10) {
+    int16_t player = int16_t(kernel::R16(ctx.esp + 4));
+    uint32_t value = kernel::R32(ctx.esp + 8);
+    __imp__sub_0006CB10(ctx, base);
+    bool keyboard = player == -1 || player == input::KeyboardPlayer();
+    if (value == kReloadAction && keyboard) g_press_taken = true;
 }
