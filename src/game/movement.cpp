@@ -1,3 +1,6 @@
+#include <algorithm>
+#include <cmath>
+
 #include "xdk/hle.h"
 
 // Bond's walk (0xA9CF0) eases last frame's move toward the stick's by 0.2 times 60 over the rate, then scales it by
@@ -32,4 +35,42 @@ bool WalkSpeed(X86Context& ctx, uint8_t*) {
     float ease = G<float>(kStepScale) * kWalkEase;
     speed = SpeedForShare(SettledShare(speed, kWalkEase), ease);
     return true;
+}
+
+// The grapple's pull (0xAA340) speeds up 0.05 a frame to 1.5 (0.5 in multiplayer) and moves that far each frame,
+// and Bond lets go if he is on the ground once 15 frames have passed. Both run as at 60 fps.
+namespace {
+
+// the grapple, Bond's state +0xF4: its point, then
+constexpr uint32_t kPullStep = 0xC;   // the pull's move this frame
+constexpr uint32_t kPullTime = 0x1A;  // u16 frames left before the ground ends the pull
+constexpr float kPullGain = 0.05f;
+constexpr float kPullTop = 1.5f;
+constexpr float kPullTopMultiplayer = 0.5f;
+constexpr float kPullFrames = 15.0f;
+constexpr uint32_t kMultiplayer = 0x260018;
+constexpr uint32_t kBondPosition = 0x24;
+
+float Distance(uint32_t a, uint32_t b) {
+    float x = G<float>(a) - G<float>(b);
+    float y = G<float>(a + 4) - G<float>(b + 4);
+    float z = G<float>(a + 8) - G<float>(b + 8);
+    return std::sqrt(x * x + y * y + z * z);
+}
+
+}  // namespace
+
+// at 0xAA4A9, in place of the pull's speed up to 0xAA4F2; grapple in esi, Bond in edi
+bool GrapplePull(X86Context& ctx, uint8_t*) {
+    float frames = G<float>(kStepScale);
+    float top = kernel::R32(kMultiplayer) ? kPullTopMultiplayer : kPullTop;
+    float& step = G<float>(ctx.esi + kPullStep);
+    float speed = std::min(step / frames + kPullGain * frames, top);  // per 60 fps frame
+    step = std::min(speed * frames, Distance(ctx.edi + kBondPosition, ctx.esi));
+    return true;
+}
+
+// at 0xAA334, once a grapple's start set its time; grapple in edi
+void GrappleStartTime(X86Context& ctx, uint8_t*) {
+    G<uint16_t>(ctx.edi + kPullTime) = uint16_t(std::lround(kPullFrames / G<float>(kStepScale)));
 }

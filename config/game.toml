@@ -287,6 +287,16 @@ at = 0xAA024
 call = "WalkSpeed"
 on_true = 0xAA048
 
+# the grapple pulls and times out as at 60 fps (src/game/movement.cpp)
+[[hook]]
+at = 0xAA4A9
+call = "GrapplePull"
+on_true = 0xAA4F2
+
+[[hook]]
+at = 0xAA334
+call = "GrappleStartTime"
+
 # the mouse turns a guided missile (src/game/mouse.cpp)
 [[hook]]
 at = 0x23838
