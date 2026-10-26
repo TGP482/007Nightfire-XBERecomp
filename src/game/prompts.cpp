@@ -1,17 +1,19 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <iterator>
 #include <string>
 #include <string_view>
 
 #include "common/mouse_keyboard.h"
+#include "core/log.h"
 #include "kernel/memory.h"
 #include "xdk/hle.h"
 
 // PC prompts: while the keyboard and mouse drive the menus, the button legends name the keys, key first, as
 // "(ENTER) Select". The game draws a button as "~" and a code inside its text (0x69C50 lays out and measures text),
 // so the codes are swapped for key names there. The controller layout in the pause menu keeps its buttons: its
-// lines hold one code each, legends several apart or "Press ~".
+// lines hold one code each, legends several apart or "Press ~". The title screen's line is a legend too.
 namespace {
 
 using kernel::G;
@@ -23,6 +25,11 @@ constexpr uint32_t kMaxText = 512;
 constexpr uint32_t kScratchSize = kMaxText * 2;
 
 constexpr char kGlyph = '~';
+
+constexpr uint32_t kStringText = 0x6D460;  // (string id, 0, 0): its text
+constexpr uint32_t kTitleLine = 0x2FB;     // the title screen's line, set by its page handler 0x854C0
+constexpr char kStartWord[] = "START";
+constexpr char kStartButton[] = "~A";  // the page's full screen text 0x10000196 takes A: ENTER
 
 std::string Upper(std::string name) {
     for (char& c : name) c = char(std::toupper(uint8_t(c)));
@@ -94,15 +101,43 @@ std::string_view GuestText(uint32_t at) {
     return {text, strnlen(text, kMaxText)};
 }
 
+size_t FindStartWord(std::string_view text) {
+    auto same = [](char a, char b) { return std::toupper(uint8_t(a)) == b; };
+    auto at = std::search(text.begin(), text.end(), std::begin(kStartWord), std::end(kStartWord) - 1, same);
+    return at == text.end() ? text.npos : size_t(at - text.begin());
+}
+
+// the title line, or the part of it shown so far, with START as the A button
+bool TitleLine(X86Context& ctx, std::string_view text, std::string& line, int& count) {
+    if (text.empty()) return false;
+    std::string_view stock = GuestText(kernel::CallGuest(ctx, kStringText, {kTitleLine, 0, 0}));
+    if (!stock.starts_with(text)) return false;
+    static bool logged = false;
+    if (!logged) LOGR("prompts: title line \"%.*s\"", int(stock.size()), stock.data());
+    logged = true;
+    line = std::string(text);
+    size_t word = FindStartWord(line);
+    if (word == line.npos || line.find(kGlyph) != line.npos) return true;
+    line.replace(word, sizeof(kStartWord) - 1, kStartButton);
+    int shrink = int(sizeof(kStartWord) - sizeof(kStartButton));
+    if (count > int(word)) count = std::max(int(word), count - shrink);
+    return true;
+}
+
 }  // namespace
 
 X86_EXTERN_FUNC(__imp__sub_00069C50);
 X86_FUNC(sub_00069C50) {
     std::string_view text = GuestText(kernel::R32(ctx.esp + kTextArg));
-    bool keys_shown = input::CursorShown() && text.find(kGlyph) != text.npos && Legend(text);
+    int count = int(kernel::R32(ctx.esp + kCountArg));
+    std::string title;
+    bool title_keys = input::KeyboardActive() && TitleLine(ctx, text, title, count);
+    if (title_keys) text = title;
+    bool legend = title_keys || (input::CursorShown() && Legend(text));
+    bool keys_shown = legend && text.find(kGlyph) != text.npos;
     if (!keys_shown) return __imp__sub_00069C50(ctx, base);
     static const uint32_t scratch = mem::AllocSystem(kScratchSize);
-    Rewritten keys = Rewrite(text, int(kernel::R32(ctx.esp + kCountArg)));
+    Rewritten keys = Rewrite(text, count);
     size_t length = std::min<size_t>(keys.text.size(), kScratchSize - 1);
     std::memcpy(kernel::HostPtr(scratch), keys.text.data(), length);
     G<char>(scratch + uint32_t(length)) = 0;
