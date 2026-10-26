@@ -373,6 +373,22 @@ at = 0xCD8BB
 call = "ParticleColourStep"
 on_true = 0xCD8DF
 
+# a window's glass shards wait, fall and fade at their 60 fps speed (src/game/glass_shards.cpp)
+[[hook]]
+at = 0x1FC70
+call = "GlassShardTimes"
+on_true = 0x1FC7F
+
+[[hook]]
+at = 0x1FDD9
+call = "GlassShardStep"
+on_true = 0x1FE3F
+
+[[hook]]
+at = 0x1FE7A
+call = "GlassShardAlpha"
+on_true = 0x1FE80
+
 # lasers wear a thrown bomb down at their 60 fps rate (src/game/bomb_damage.cpp)
 [[hook]]
 at = 0x22965
