@@ -970,6 +970,85 @@ call = "DrivingStepFactor"
 at = 0x86A8B
 call = "DrivingStepFactor"
 
+# people, rumble, rules and props: steps per tick scale to the update (src/driving/world_steps.cpp)
+[[hook]]
+at = 0x19721  # animation time step
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x190D8  # time before the step, root motion
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x188A2  # blend time before the step
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x1890E
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x1F65C  # velocity from the move this update
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0x1288C  # rumble +0x2C
+call = "DrivingCountdownStep"
+
+[[hook]]
+at = 0x2A40F
+call = "DrivingPathStep"
+
+[[hook]]
+at = 0xBB159
+call = "DrivingHeadingStep"
+
+[[hook]]
+at = 0xBB172
+call = "DrivingHeadingStep"
+
+[[hook]]
+at = 0xBB17A
+call = "DrivingHeadingStepBack"
+
+[[hook]]
+at = 0xD95D7  # speed from the move this update
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0xB6B92  # health regained
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0xB7E30  # ticks to seconds
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0xB7ED0  # score per tick in a zone
+call = "DrivingTickless"
+on_true = 0xB7EFD
+
+[[hook]]
+at = 0xBCCBB  # proximity beep counts ticks
+call = "DrivingTickless"
+on_true = 0xBCCBC
+
+# drawn each frame: trail points and aging sprites move on whole ticks (src/driving/tick_steps.cpp)
+[[hook]]
+at = 0x5D557  # a trail point
+call = "DrivingFrameTickless"
+on_true = 0x5D5AE
+
+[[hook]]
+at = 0xD56E3  # sprite frame +0x5C
+call = "DrivingFrameTickless"
+on_true = 0xD56E6
+
+[[hook]]
+at = 0xD56F2  # sprite age +0x68
+call = "DrivingFrameTickless"
+on_true = 0xD56F3
+
 # argument locations in API order for functions a link time code generated library compiled with another
 # convention: a register (eax ebx ecx edx esi edi ebp) or "stack" for the next stack slot, which the callee pops
 [abi]
