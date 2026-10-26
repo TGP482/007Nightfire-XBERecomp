@@ -632,6 +632,119 @@ call = "DrivingPlaneBankEase"
 at = 0x6E0F9
 call = "DrivingPlaneBankEase"
 
+# homing missile (0x60110): turn steps and slerp shares per tick (src/driving/weapon_steps.cpp)
+[[hook]]
+at = 0x601C7  # turn step toward the target
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x601F0
+call = "DrivingMissileTurnBack"
+
+[[hook]]
+at = 0x6021D
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x60246
+call = "DrivingMissileTurnBack"
+
+[[hook]]
+at = 0x604EA  # lead prediction horizon
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0x6038D  # slerp 0.65
+call = "DrivingEspCEase"
+
+[[hook]]
+at = 0x6042C  # slerp 0.02
+call = "DrivingEspCEase"
+
+[[hook]]
+at = 0x60626  # elapsed ticks to seconds
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0x6065C  # slerp by a ramp
+call = "DrivingEspCEase"
+
+[[hook]]
+at = 0x60837  # slerp 0.1
+call = "DrivingEspCEase"
+
+[[hook]]
+at = 0x608E6  # elapsed ticks to seconds
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0x60A73
+call = "DrivingMissileFadeIn"
+
+[[hook]]
+at = 0x60AFF
+call = "DrivingMissileWreckCountdown"
+after = true
+
+[[hook]]
+at = 0x5F713  # lifetime +0x90
+call = "DrivingTickless"
+on_true = 0x5F714
+
+# explosions, grenades, projectiles, lifts and timed props count whole ticks
+[[hook]]
+at = 0x5D0A0  # an explosion hits once per tick
+call = "DrivingTickless"
+on_true = 0x5D39C
+
+[[hook]]
+at = 0x5D805  # grenade lifetime +0x6C8
+call = "DrivingTickless"
+on_true = 0x5D806
+
+[[hook]]
+at = 0x60B93  # projectile lifetime +0x70
+call = "DrivingTickless"
+on_true = 0x60B94
+
+[[hook]]
+at = 0x745B9  # lift steps down
+call = "DrivingTickless"
+on_true = 0x745BA
+
+[[hook]]
+at = 0x745D6  # lift steps up
+call = "DrivingTickless"
+on_true = 0x745D7
+
+[[hook]]
+at = 0x74EA3  # lifetime +0x78
+call = "DrivingTickless"
+on_true = 0x74EA4
+
+[[hook]]
+at = 0x754A5  # countdown +0x70
+call = "DrivingTickless"
+on_true = 0x754A6
+
+[[hook]]
+at = 0x754FD  # countdown +0x6C
+call = "DrivingTickless"
+on_true = 0x754FE
+
+# turning props (vt 0x190034): a turn per tick, set from the step when built
+[[hook]]
+at = 0x73AF0
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0x73B15
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0x73600  # the turn toward its target, at most this much
+call = "DrivingEspCAmount"
+
 # argument locations in API order for functions a link time code generated library compiled with another
 # convention: a register (eax ebx ecx edx esi edi ebp) or "stack" for the next stack slot, which the callee pops
 [abi]
