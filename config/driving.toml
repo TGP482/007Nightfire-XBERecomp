@@ -909,6 +909,20 @@ at = 0x88881  # orbit +0x268
 call = "DrivingTickless"
 on_true = 0x88887
 
+# animated cameras (0x82400, 0x82840): the animation's place goes up by 1 over its length in ticks each update
+[[hook]]
+at = 0x82655
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x826B4  # ticks left +0x13C
+call = "DrivingAnimTicksLeft"
+on_true = 0x826D8
+
+[[hook]]
+at = 0x82C0C
+call = "DrivingStepAmount"
+
 [[hook]]
 at = 0x82809  # velocity
 call = "DrivingStepRate"

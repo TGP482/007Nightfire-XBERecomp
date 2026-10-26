@@ -21,6 +21,9 @@ constexpr uint32_t kAimInputShare = 0x1EC34C;
 constexpr uint32_t kAimSettleShare = 0x18B8EC;  // 0.8
 constexpr uint32_t kAimKick = 0x1918D0;      // 1/72
 
+// an animated camera (0x82400): its ticks left, set from the animation's length in ticks
+constexpr uint32_t kAnimTicksLeft = 0x13C;
+
 void ScaleRegisterShare(X86Context& ctx, uint32_t record, uint32_t offset) {
     driving::ScaleShare(ctx, G<float>(record + offset));
 }
@@ -56,3 +59,10 @@ void DrivingEbx50Ease(X86Context& ctx, uint8_t*) { ScaleRegisterShare(ctx, ctx.e
 void DrivingEsi84Ease(X86Context& ctx, uint8_t*) { ScaleRegisterShare(ctx, ctx.esi, 0x84); }
 void DrivingEsi90Ease(X86Context& ctx, uint8_t*) { ScaleRegisterShare(ctx, ctx.esi, 0x90); }
 void DrivingEsi9CEase(X86Context& ctx, uint8_t*) { ScaleRegisterShare(ctx, ctx.esi, 0x9C); }
+
+// at 0x826B4: the animated camera's ticks left only drop on a tick; eax holds them for the test at 0x826D8
+bool DrivingAnimTicksLeft(X86Context& ctx, uint8_t*) {
+    if (driving::UpdateTicked()) return false;
+    ctx.eax = G<uint32_t>(ctx.esi + kAnimTicksLeft);
+    return true;
+}
