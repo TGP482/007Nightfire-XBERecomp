@@ -12,6 +12,7 @@
 #include "common/options.h"
 #include "core/diag.h"
 #include "d3d/occlusion.h"
+#include "d3d/visibility.h"
 #include "gpu/backend.h"
 #include "gpu/shaders.h"
 #include "gpu/texture.h"
@@ -1370,6 +1371,13 @@ void Walk(uint32_t end) {
 }
 }  // namespace
 }  // namespace d3d
+
+// the console's GPU runs on its own, so a title may wait on a report within the frame
+void d3d::FinishVisibilityTests() {
+    std::lock_guard<std::recursive_mutex> lock(g_lock);
+    Walk(Dev(kDevPush));
+    if (g_backend) g_backend->Flush();
+}
 
 HLE_STDCALL(D3DDevice_DrawVerticesUP, 4) {
     std::lock_guard<std::recursive_mutex> lock(g_lock);
