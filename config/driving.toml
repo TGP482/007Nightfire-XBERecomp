@@ -12,6 +12,7 @@ library = "007NightfireDriving.dll"  # <exe>.dll, which the executable delay loa
 
 # extra entry points
 [functions]
+0x81D10 = ""  # the dashboard camera, only reached through its camera type (0x79405)
 
 # functions the host replaces or calls by name, 0 where the image has none
 [symbols]
@@ -744,6 +745,230 @@ call = "DrivingStepRate"
 [[hook]]
 at = 0x73600  # the turn toward its target, at most this much
 call = "DrivingEspCAmount"
+
+# player camera: runs once per update, its eases and steps per tick scale to it (src/driving/camera_steps.cpp)
+[[hook]]
+at = 0x877FE
+call = "DrivingCameraStale"
+on_true = 0x8787E
+on_false = 0x87814
+
+[[hook]]
+at = 0x87531  # shake time +0x270
+call = "DrivingTickless"
+on_true = 0x87537
+
+[[hook]]
+at = 0x8755F
+call = "DrivingShakeEase"
+
+[[hook]]
+at = 0x97710  # field of view step limit
+call = "DrivingEsp8Amount"
+
+# chase camera (0x87880)
+[[hook]]
+at = 0x87A51  # noise arm
+call = "DrivingEsp5CEase"
+
+[[hook]]
+at = 0x87AE4  # roll
+call = "DrivingEdi20Ease"
+
+[[hook]]
+at = 0x87E4D  # speed share through the step
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0x87F29  # arm swing ticks +0x13C
+call = "DrivingTickless"
+on_true = 0x87F2F
+
+[[hook]]
+at = 0x87F3F
+call = "DrivingChaseGainEase"
+
+[[hook]]
+at = 0x88009  # arm toward its target
+call = "DrivingEsp4Ease"
+
+[[hook]]
+at = 0x8823E  # +0x30 countdown
+call = "DrivingTickless"
+on_true = 0x88242
+
+[[hook]]
+at = 0x882AD  # up vector
+call = "DrivingEspCEase"
+
+[[hook]]
+at = 0x97CF6  # arm offset 0.05
+call = "DrivingEsp14Ease"
+
+# bumper and dashboard cameras (0x80B90, 0x81D10)
+[[hook]]
+at = 0x80C84
+call = "DrivingBumperEase"
+
+[[hook]]
+at = 0x81E07
+call = "DrivingBumperEase"
+
+[[hook]]
+at = 0x81F29
+call = "DrivingEsi9CEase"
+
+[[hook]]
+at = 0x81FD3
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0x82038
+call = "DrivingEsp4Ease"
+
+[[hook]]
+at = 0x8213D  # body force times the step, a lean target
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0x821CC
+call = "DrivingEsp94Ease"
+
+[[hook]]
+at = 0x82278
+call = "DrivingEsi84Ease"
+
+[[hook]]
+at = 0x82335
+call = "DrivingEsi90Ease"
+
+# fixed, tumble, spline, orbit and animated cameras
+[[hook]]
+at = 0x8521C
+call = "DrivingEsp14Ease"
+
+[[hook]]
+at = 0x85372  # velocity from the move this update
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0x88501
+call = "DrivingEsp14Ease"
+
+[[hook]]
+at = 0x88619
+call = "DrivingEsp18Ease"
+
+[[hook]]
+at = 0x88675  # tumble ticks +0x140
+call = "DrivingTickless"
+on_true = 0x8867B
+
+[[hook]]
+at = 0x84DA7
+call = "DrivingEsp48Ease"
+
+[[hook]]
+at = 0x8879D  # orbit point +0x264
+call = "DrivingTickless"
+on_true = 0x887A3
+
+[[hook]]
+at = 0x88881  # orbit +0x268
+call = "DrivingTickless"
+on_true = 0x88887
+
+[[hook]]
+at = 0x82809  # velocity
+call = "DrivingStepRate"
+
+[[hook]]
+at = 0x82C33  # animation ticks +0x13C
+call = "DrivingTickless"
+on_true = 0x82C4F
+
+[[hook]]
+at = 0x82DDC  # velocity
+call = "DrivingStepRate"
+
+# gun camera (0x857D0)
+[[hook]]
+at = 0x85E13  # wobble
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x85E45
+call = "DrivingAimInputEase"
+
+[[hook]]
+at = 0x85F37  # hold time
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x85FBC
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x86049
+call = "DrivingEbx50Ease"
+
+[[hook]]
+at = 0x86071
+call = "DrivingEbx50Ease"
+
+[[hook]]
+at = 0x8608E
+call = "DrivingEbx50Ease"
+
+[[hook]]
+at = 0x860D0
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x86160
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x862DC
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x86327
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x86344
+call = "DrivingStepAmount"
+
+[[hook]]
+at = 0x8636C
+call = "DrivingAimKick"
+
+[[hook]]
+at = 0x863C6  # kick ticks +0x208
+call = "DrivingTickless"
+on_true = 0x863CC
+
+[[hook]]
+at = 0x865BE  # swing ticks +0x170
+call = "DrivingTickless"
+on_true = 0x865C5
+
+[[hook]]
+at = 0x8660E
+call = "DrivingAimSettleEase"
+
+[[hook]]
+at = 0x8667D
+call = "DrivingAimSettleEase"
+
+[[hook]]
+at = 0x86A6F
+call = "DrivingStepFactor"
+
+[[hook]]
+at = 0x86A8B
+call = "DrivingStepFactor"
 
 # argument locations in API order for functions a link time code generated library compiled with another
 # convention: a register (eax ebx ecx edx esi edi ebp) or "stack" for the next stack slot, which the callee pops
