@@ -43,6 +43,18 @@ constexpr uint32_t kMissileOwner = 0x24;
 constexpr uint32_t kMissileTurnAcross = 0x3C;
 constexpr uint32_t kMissileTurnUpDown = 0x38;
 
+// a mounted turret (kind 0x47, 0x27FC0): the controller's +0x808 while the player uses it, and its aim in radians,
+// right lower and down higher, as its sticks move it
+constexpr uint32_t kControllerMounted = 0x808;
+constexpr uint32_t kObjectKind = 0xDB;
+constexpr uint8_t kTurret = 0x47;
+constexpr uint32_t kObjectState = 0xD0;
+constexpr uint16_t kTurretManned = 1;
+constexpr uint32_t kTurretPlayer = 0xD2;
+constexpr uint32_t kObjectData = 0xBC;
+constexpr uint32_t kTurretPitch = 0x5C;
+constexpr uint32_t kTurretYaw = 0x60;
+
 // mouse counts the player's look took while steering a missile, for its turn
 float g_missile_dx = 0.0f;
 float g_missile_dy = 0.0f;
@@ -65,7 +77,13 @@ void ScalePadLook(uint32_t controller, bool aim, float pitch_before) {
     pitch = pitch_before + (pitch - pitch_before) * y;
 }
 
+bool OnTurret(uint32_t controller) {
+    uint32_t mounted = kernel::R32(controller + kControllerMounted);
+    return mounted && G<uint8_t>(mounted + kObjectKind) == kTurret;
+}
+
 void MouseLook(uint32_t player, uint32_t controller, bool aim) {
+    if (OnTurret(controller)) return;  // the turret takes the mouse
     float dx;
     float dy;
     if (!input::TakeMouse(dx, dy)) return;
@@ -134,6 +152,21 @@ X86_FUNC(sub_000B9950) {
     for (size_t i = 0; i < std::size(kAutoAim); i++) setting[i] = std::exchange(G<uint8_t>(kAutoAim[i] + own), 0);
     __imp__sub_000B9950(ctx, base);
     for (size_t i = 0; i < std::size(kAutoAim); i++) G<uint8_t>(kAutoAim[i] + own) = setting[i];
+}
+
+// a turret's frame (turret): the mouse aims it beside the sticks, before the frame clamps the aim
+X86_EXTERN_FUNC(__imp__sub_00027FC0);
+X86_FUNC(sub_00027FC0) {
+    uint32_t turret = kernel::R32(ctx.esp + 4);
+    bool manned = G<uint16_t>(turret + kObjectState) == kTurretManned;
+    float dx;
+    float dy;
+    if (manned && G<int16_t>(turret + kTurretPlayer) == input::KeyboardPlayer() && input::TakeMouse(dx, dy)) {
+        uint32_t data = kernel::R32(turret + kObjectData);
+        G<float>(data + kTurretYaw) -= dx * kRadiansPerCount;
+        G<float>(data + kTurretPitch) += dy * kRadiansPerCount;
+    }
+    __imp__sub_00027FC0(ctx, base);
 }
 
 // at 0x23838 in a guided missile's flight (the missile in edi): the mouse turns it beside the sticks
