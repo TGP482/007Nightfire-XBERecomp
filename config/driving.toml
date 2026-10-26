@@ -319,6 +319,11 @@ call = "DrivingFpsCounter"
 at = 0x96F76
 call = "DrivingFov"
 
+# lock on targets are placed with the view's own angle (src/driving/fov.cpp)
+[[hook]]
+at = 0xCE371
+call = "DrivingTargetProjection"
+
 # real time updates: the audio clock and game time count whole console ticks (src/driving/frame_rate.cpp)
 [[hook]]
 at = 0x4DDD5
