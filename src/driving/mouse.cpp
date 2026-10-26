@@ -6,6 +6,7 @@
 #include "common/menu.h"
 #include "common/mouse_keyboard.h"
 #include "common/options.h"
+#include "driving/frame_rate.h"
 #include "xdk/hle.h"
 
 // A turret's look (0xB7AE0) sets its camera's turn rates from the sticks, turns a frame (+0x700 across, right
@@ -47,6 +48,8 @@ constexpr uint32_t kCharacterSightYaw = 0x1E4;
 constexpr uint32_t kCameraRecord = 0x973C0;
 constexpr uint32_t kDeadZonePitch = 0x40;
 constexpr uint32_t kDeadZoneYaw = 0x44;
+// of each turn the update keeps (0x60379), eased to the update; the mouse and gyro are divided by it to turn in full
+constexpr double kTurnKept = 0.65;
 
 // the angles are whole turns: the rotations (0x116C70, 0x7A1E0) take the sine of 2 pi times them
 constexpr float kTurnsPerDegree = 1.0f / 360.0f;
@@ -151,10 +154,13 @@ X86_FUNC(sub_00060110) {
     bool pad = !input::KeyboardActive();
     LookTurn mouse = MouseTurn();
     LookTurn gyro = GyroTurn();
+    float kept = float(driving::Ease(kTurnKept));
     float across_sensitivity = pad ? o.pad_horizontal_sensitivity : 1.0f;
     float up_down_sensitivity = pad ? o.pad_vertical_sensitivity : 1.0f;
-    Axis across = ApplyAxis(camera, kRateAcross, kTurnAcross, across_sensitivity, mouse.across + gyro.across);
-    Axis up_down = ApplyAxis(camera, kRateUpDown, kTurnUpDown, up_down_sensitivity, mouse.up_down + gyro.up_down);
+    float added_across = (mouse.across + gyro.across) / kept;
+    float added_up_down = (mouse.up_down + gyro.up_down) / kept;
+    Axis across = ApplyAxis(camera, kRateAcross, kTurnAcross, across_sensitivity, added_across);
+    Axis up_down = ApplyAxis(camera, kRateUpDown, kTurnUpDown, up_down_sensitivity, added_up_down);
     // the mouse aims for itself: no pull onto the locked target
     uint32_t target = R32(camera + kTarget);
     uint8_t was_free = G<uint8_t>(camera + kTargetFree);
