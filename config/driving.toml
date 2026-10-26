@@ -284,6 +284,15 @@ XPP_MemoryUnitType          = 0
 at = 0xDECFA
 call = "DrivingLegendKeys"
 
+# a tutorial line's button picture, blank once the key is in the line (src/driving/prompts.cpp)
+[[hook]]
+at = 0xDDBC5
+call = "DrivingLinePictureEdi"
+
+[[hook]]
+at = 0xDF0F9
+call = "DrivingLinePictureEsi"
+
 # the pause menu's RECOMP page and legend flags (src/driving/options_menu.cpp)
 [[hook]]
 at = 0xDE9E0

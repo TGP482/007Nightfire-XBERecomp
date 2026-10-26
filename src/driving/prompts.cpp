@@ -91,6 +91,61 @@ void SwapSlot(X86Context& ctx, uint32_t i, const std::string& key) {
 
 }  // namespace
 
+// The HUD's tutorial lines: 0xDA1D0 splits a line at its first *A*, *G*, *P* or *D* (gas, gadget, fire, weapon) and its
+// callers draw that button's picture between the halves. The key goes into the line instead and the picture is blank.
+namespace {
+
+// 0xDA1D0's arguments, stdcall (line, before, after): the buffers for the text before and after the button
+constexpr uint32_t kBeforeArg = 0x8;
+constexpr uint32_t kAfterArg = 0xC;
+constexpr uint32_t kBeforeSize = 0x40;  // on both callers' stacks, the after buffer follows it
+constexpr uint32_t kMaxLine = 256;
+
+constexpr const char* kButtonActions[] = {"car_accelerate", "car_gadget", "car_fire", "car_fire"};
+constexpr uint32_t kButtons = 4;
+
+bool g_line_keys = false;  // the line just split has its key in it
+
+std::string GuestText(uint32_t at) {
+    const char* text = static_cast<const char*>(kernel::HostPtr(at));
+    return std::string(text, strnlen(text, kMaxLine));
+}
+
+uint32_t BlankPicture(uint32_t picture) {
+    static const uint32_t blank = mem::AllocSystem(kPictureSize);
+    std::memcpy(kernel::HostPtr(blank), kernel::HostPtr(picture), kPictureSize);
+    G<float>(blank + kPictureWidth) = 0.0f;
+    G<float>(blank + kPictureHeight) = 0.0f;
+    return blank;
+}
+
+}  // namespace
+
+X86_EXTERN_FUNC(__imp__sub_000DA1D0);
+X86_FUNC(sub_000DA1D0) {
+    uint32_t before = R32(ctx.esp + kBeforeArg);
+    uint32_t after = R32(ctx.esp + kAfterArg);
+    g_line_keys = false;
+    __imp__sub_000DA1D0(ctx, base);
+    if (!input::KeyboardActive() || ctx.eax >= kButtons) return;
+    std::string key = Bound(kButtonActions[ctx.eax]);
+    if (key.empty()) return;
+    std::string line = GuestText(before) + "(" + key + ")" + GuestText(after);
+    size_t length = std::min<size_t>(line.size(), kBeforeSize - 1);
+    std::memcpy(kernel::HostPtr(before), line.data(), length);
+    G<char>(before + uint32_t(length)) = 0;
+    G<char>(after) = 0;
+    g_line_keys = true;
+}
+
+// at 0xDDBC5 and 0xDF0F9, once the button's picture is chosen
+void DrivingLinePictureEdi(X86Context& ctx, uint8_t*) {
+    if (g_line_keys) ctx.edi = BlankPicture(ctx.edi);
+}
+void DrivingLinePictureEsi(X86Context& ctx, uint8_t*) {
+    if (g_line_keys) ctx.esi = BlankPicture(ctx.esi);
+}
+
 void DrivingRecompLegend(X86Context& ctx);  // options_menu.cpp
 
 void DrivingLegendKeys(X86Context& ctx, uint8_t*) {
