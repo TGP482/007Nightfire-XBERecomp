@@ -139,15 +139,6 @@ constexpr Target kActions[] = {
     {{"car_camera", "CAMERA VIEW", "C", "DRIVING"}, kImageKey, 0},
     {{"car_look_back", "LOOK BACK", "Tab", "DRIVING"}, kImageKey, 0},
     {{"car_pause", "PAUSE MENU", "Escape", "DRIVING"}, kImageKey, 0},
-    {{"car_aim_up", "TURRET AIM UP", "W", "DRIVING"}, kImageKey, 0},
-    {{"car_aim_down", "TURRET AIM DOWN", "S", "DRIVING"}, kImageKey, 0},
-    {{"car_aim_left", "TURRET AIM LEFT", "A", "DRIVING"}, kImageKey, 0},
-    {{"car_aim_right", "TURRET AIM RIGHT", "D", "DRIVING"}, kImageKey, 0},
-    {{"car_manual_aim", "TURRET MANUAL AIM", "RMB", "DRIVING"}, kImageKey, 0},
-    {{"car_reload", "TURRET RELOAD", "R", "DRIVING"}, kImageKey, 0},
-    {{"car_spin", "TURRET SPIN", "C", "DRIVING"}, kImageKey, 0},
-    {{"car_zoom_in", "TURRET ZOOM IN", "Wheel Up", "DRIVING"}, kImageKey, 0},
-    {{"car_zoom_out", "TURRET ZOOM OUT", "Wheel Down", "DRIVING"}, kImageKey, 0},
 };
 constexpr size_t kCount = std::size(kActions);
 constexpr size_t HostAction(std::string_view id) {
