@@ -333,6 +333,11 @@ call = "DrivingFov"
 at = 0xCE371
 call = "DrivingTargetProjection"
 
+# the scene is culled to the widened view (src/driving/fov.cpp)
+[[hook]]
+at = 0x8A490
+call = "DrivingCullFov"
+
 # real time updates: the audio clock and game time count whole console ticks (src/driving/frame_rate.cpp)
 [[hook]]
 at = 0x4DDD5

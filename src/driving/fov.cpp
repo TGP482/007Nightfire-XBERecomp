@@ -6,7 +6,8 @@
 // Field of view: the view's draw (0x96EB0) takes the camera's angle (+0xB4, 33 unzoomed) twice as its horizontal
 // degrees on a 4:3 frame, a quarter wider on a widescreen output, and hands it to the projection (0xE46D0). The car,
 // turret and sniper cameras all draw through it; the setting widens it as default.xbe's own 75 degrees widen to it,
-// so a zoom keeps its share. Lock on targets (0xCE2B0) are placed with the same angle, the setting's included.
+// so a zoom keeps its share. Lock on targets (0xCE2B0) are placed with the same angle, the setting's included, and
+// the scene is culled (0x8A420) to it, so nothing at the sides of a wide view goes missing.
 namespace {
 
 using kernel::G;
@@ -25,6 +26,9 @@ constexpr uint32_t kHudSqueeze = 0x189ED0;  // 0.75, the HUD's 4:3 width on a wi
 // the target projection's stack at 0xCE371
 constexpr uint32_t kCameraAngle = 0xF4;
 constexpr uint32_t kTargetHalfTan = 0x2C;
+
+// the cull's stack at 0x8A490: the camera's angle, half the view's degrees as the draw takes it twice
+constexpr uint32_t kCullHalfAngle = 0xC;
 
 float HalfTan(float degrees) { return std::tan(degrees / 2 / kDegrees); }
 
@@ -54,4 +58,10 @@ void DrivingTargetProjection(X86Context& ctx, uint8_t*) {
         squeeze = G<float>(kHudSqueeze);
     }
     G<float>(ctx.esp + kTargetHalfTan) = HalfTan(SettingDegrees(degrees)) * squeeze;
+}
+
+// at 0x8A490, before the cull (0x8D440) takes the camera's angle
+void DrivingCullFov(X86Context& ctx, uint8_t*) {
+    float& half = G<float>(ctx.esp + kCullHalfAngle);
+    half = SettingDegrees(2 * half) / 2;
 }
