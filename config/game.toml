@@ -275,6 +275,11 @@ DSound_StreamVtable2        = 0x162640
 XPP_GamepadType             = 0x15722C
 XPP_MemoryUnitType          = 0
 
+# sprite batch lists take their space off the heap's end (src/game/out_of_memory.cpp)
+[[hook]]
+at = 0x70A72
+call = "ReserveBatchLists"
+
 # the gadgets recharge on a 60 fps clock (src/game/gadget_recharge.cpp)
 [[hook]]
 at = 0xADA5C

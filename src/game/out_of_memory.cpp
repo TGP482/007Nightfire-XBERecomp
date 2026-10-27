@@ -4,13 +4,13 @@
 
 #include "common/options.h"
 #include "core/log.h"
-#include "kernel/memory.h"
 #include "xdk/hle.h"
 
 // The game's own heap (0x70AE0 allocates, 0x705F0 frees): a summary every half minute, and what filled it when it
 // runs out. Out of memory zeroes its search start and the next allocation reads address 0.
-// Sprite batches (0xDCAC0) take a heap list every frame, which splits the heap at high fps; each slot keeps its own
-// list outside the heap instead (the heap's free skips those).
+// Sprite batches (0xDCAC0) take a heap list every frame, which splits the heap at high fps; their lists come from
+// space taken off the heap's end instead (the heap's free skips it), handed out in turn as the slots are.
+// The space is contiguous like the heap: the vertex buffer a list backs holds its physical address.
 
 namespace {
 
@@ -31,10 +31,14 @@ constexpr uint32_t kArgFlags = 8;
 // 0x709C0's stack at entry: return, the allocator's four saved registers, its return, then its arguments
 constexpr uint32_t kOutOfMemoryArgs = 0x14;
 constexpr std::chrono::seconds kSummaryPeriod{30};
-// sprite batch ring
+// sprite batch ring: the slot used next, then 12 byte entries whose first field is the drawn batch, 0 when idle
 constexpr uint32_t kBatchAllocReturn = 0xDCAF6;
 constexpr uint32_t kBatchSlot = 0x2ADF80;
+constexpr uint32_t kBatchEntries = 0x2ADF88;
+constexpr uint32_t kBatchEntry = 12;
 constexpr uint32_t kBatchSlots = 64;
+// the lists' space off the heap's end
+constexpr uint32_t kListSpace = 4u << 20;
 
 struct HeapUse {
     std::array<uint32_t, kTags> tag_bytes{};
@@ -66,17 +70,35 @@ struct BatchList {
     uint32_t va = 0;
     uint32_t size = 0;
 };
-std::array<BatchList, kBatchSlots> g_batch_lists;
+std::array<BatchList, kBatchSlots> g_batch_lists;  // the list each slot was last given
+uint32_t g_list_space = 0;
+uint32_t g_list_next = 0;  // offset in the space
 
-// the slot is idle here, so its old list is no longer drawn
-uint32_t EnsureBatchList(uint32_t size) {
-    BatchList& list = g_batch_lists[kernel::R32(kBatchSlot) % kBatchSlots];
-    if (list.size < size) {
-        if (list.va) mem::FreeSystem(list.va);
-        list.va = mem::AllocSystem(size);
-        list.size = size;
+// a slot draws its batch, so reads its list, until its frames run out (0xDCC60)
+bool SlotDrawn(uint32_t slot) { return kernel::R32(kBatchEntries + slot * kBatchEntry) != 0; }
+
+bool ListDrawn(uint32_t at, uint32_t size) {
+    for (uint32_t slot = 0; slot < kBatchSlots; slot++) {
+        const BatchList& list = g_batch_lists[slot];
+        if (list.va < at + size && at < list.va + list.size && SlotDrawn(slot)) return true;
     }
-    return list.va;
+    return false;
+}
+
+// the slot is idle here. Slots free in the order they were used, so a drawn list at the next place means the space
+// is full: 0, and the batch is skipped.
+uint32_t AllocBatchList(uint32_t size) {
+    if (!g_list_space || size > kListSpace) return 0;
+    uint32_t pos = g_list_next + size > kListSpace ? 0 : g_list_next;
+    if (ListDrawn(g_list_space + pos, size)) {
+        static bool logged = false;
+        if (!logged) LOGE("heap: no room for a sprite batch list of %u bytes", size);
+        logged = true;
+        return 0;
+    }
+    g_batch_lists[kernel::R32(kBatchSlot) % kBatchSlots] = {g_list_space + pos, size};
+    g_list_next = pos + size;
+    return g_list_space + pos;
 }
 
 void LogSummary(uint32_t allocations, double seconds) {
@@ -101,7 +123,7 @@ X86_FUNC(sub_00070AE0) {
         last = now;
     }
     if (kernel::R32(ctx.esp) == kBatchAllocReturn) {
-        kernel::Return(ctx, EnsureBatchList(kernel::R32(ctx.esp + kArgSize)), 0);
+        kernel::Return(ctx, AllocBatchList(kernel::R32(ctx.esp + kArgSize)), 0);
         return;
     }
     __imp__sub_00070AE0(ctx, base);
@@ -122,4 +144,11 @@ X86_FUNC(sub_000709C0) {
         uint32_t name = kernel::R32(kTagNames + t * 4);
         LOGR("heap:   tag %u %s %u", t, name ? kernel::ReadCString(name, 64).c_str() : "", use.tag_bytes[t]);
     }
+}
+
+// at 0x70A72, once the heap's memory is made (0xDC870) and before the heap is laid out in it
+void ReserveBatchLists(X86Context&, uint8_t*) {
+    uint32_t size = kernel::R32(kHeapSize) - kListSpace;
+    kernel::W32(kHeapSize, size);
+    g_list_space = kernel::R32(kHeapBase) + size;
 }
