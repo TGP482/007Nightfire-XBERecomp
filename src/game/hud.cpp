@@ -15,7 +15,8 @@
 // x' = left + (x - left) * 3/4 + anchor * width / 4. A side of a sprite on a side of the view stays there and its other
 // side goes where a centered sprite's would, so a full-screen overlay built from pieces still covers the view.
 // Markers the HUD places on the world through the view's projection (0xDB230), which already fits the wide view, are
-// moved out from the middle as far as that brings them in, so only their width narrows.
+// moved out as far as their panel's placement brings them in, so only their width narrows. The grapple's icon is one,
+// placed by the ammo panel on the right.
 
 namespace {
 
@@ -98,7 +99,9 @@ constexpr Panel kPanels[] = {{0x17FDE8, kLeft},   // health ring
                              {0x1806D8, kAuto}};  // multiplayer radar
 
 uint32_t g_view = 0;  // while its 2D layer draws
-bool g_marking = false;  // a panel places its markers on the world (0xB4760 its targets, 0xB4330 the flare)
+// while a panel places its markers on the world, its anchor (0xB4760 its targets and 0xB4330 the flare in the middle,
+// 0xB1F90 the grapple's icon on the right); kAuto while none does
+float g_marker_anchor = kAuto;
 bool g_film = false;  // the film player's frame draws
 bool g_side_bars = false;  // DrawSideBars draws
 bool g_menu_film = false;  // the film playing is a menu page's background
@@ -202,13 +205,19 @@ constexpr uint32_t kProjectOut = 8;
 constexpr uint32_t kProjectView = 0xC;
 constexpr uint32_t kViewWidth = 0xF8;
 
-// out x from the view's left, where the centered placement narrows it back to
-void Unnarrow(uint32_t out, uint32_t index) {
+// out x from the view's left, where the anchor's placement narrows it back to
+void Unnarrow(uint32_t out, uint32_t index, float anchor) {
     uint32_t view = index < kViewCount ? kernel::R32(kViews + index * 4) : 0;
     if (!view) return;
-    float middle = kernel::G<float>(view + kViewWidth) / 2;
+    float width = kernel::G<float>(view + kViewWidth);
     float& x = kernel::G<float>(out);
-    x = middle + (x - middle) / kNarrow;
+    x = (x - anchor * width * (1 - kNarrow)) / kNarrow;
+}
+
+void PlaceMarkers(X86Context& ctx, uint8_t* base, void (*panel)(X86Context&, uint8_t*), float anchor) {
+    g_marker_anchor = anchor;
+    panel(ctx, base);
+    g_marker_anchor = kAuto;
 }
 
 }  // namespace
@@ -218,23 +227,18 @@ X86_FUNC(sub_000DB230) {
     uint32_t out = kernel::R32(ctx.esp + kProjectOut);
     uint32_t index = kernel::G<uint16_t>(ctx.esp + kProjectView);
     __imp__sub_000DB230(ctx, base);
-    if (g_marking && app::Widescreen() && out) Unnarrow(out, index);
+    if (g_marker_anchor != kAuto && app::Widescreen() && out) Unnarrow(out, index, g_marker_anchor);
 }
 
-// the HUD's world markers, cdecl (player, slot, descriptor)
+// the HUD's panels that place world markers, cdecl (player, slot, descriptor)
 X86_EXTERN_FUNC(__imp__sub_000B4760);
-X86_FUNC(sub_000B4760) {
-    g_marking = true;
-    __imp__sub_000B4760(ctx, base);
-    g_marking = false;
-}
+X86_FUNC(sub_000B4760) { PlaceMarkers(ctx, base, __imp__sub_000B4760, kCenter); }
 
 X86_EXTERN_FUNC(__imp__sub_000B4330);
-X86_FUNC(sub_000B4330) {
-    g_marking = true;
-    __imp__sub_000B4330(ctx, base);
-    g_marking = false;
-}
+X86_FUNC(sub_000B4330) { PlaceMarkers(ctx, base, __imp__sub_000B4330, kCenter); }
+
+X86_EXTERN_FUNC(__imp__sub_000B1F90);
+X86_FUNC(sub_000B1F90) { PlaceMarkers(ctx, base, __imp__sub_000B1F90, kRight); }
 
 // a film starts, cdecl (film, loops, volume)
 X86_EXTERN_FUNC(__imp__sub_000DCCD0);
