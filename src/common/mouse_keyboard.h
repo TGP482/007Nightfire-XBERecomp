@@ -27,6 +27,11 @@ bool TakeMouse(float& dx, float& dy);
 void SeenPad(const Pad& pad);  // a controller's report before the panel or keys change it
 bool KeyboardActive();         // keyboard or mouse used last, not a controller
 
+// typing into the game's codename keyboard (src/game/name_entry.cpp)
+void OnChar(uint32_t c);  // window thread, WM_CHAR
+void SetTyping();         // game thread, each frame the keyboard takes input: the keys type, not play
+std::string TakeTyped();  // the characters typed since the last call, Backspace and Enter among them
+
 // the game's own menus
 void SetMenu(bool menu);  // game thread, each frame: a menu is up
 bool CursorShown();       // in a menu with the keyboard or mouse used last

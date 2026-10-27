@@ -9,6 +9,7 @@
 #include <iterator>
 #include <mutex>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -46,6 +47,12 @@ constexpr uint64_t kCaptureMs = 250;  // PressedKey asked this recently: a key c
 constexpr int kWheelUp = 0x0E;
 constexpr int kWheelDown = 0x0F;
 std::atomic<uint64_t> g_wheel_ms[2] = {};  // the last notch up, down
+// the game's codename keyboard is up: the keys type its name instead of playing (src/game/name_entry.cpp)
+std::atomic<uint64_t> g_typing_ms{0};  // SetTyping, asked every frame it is up
+std::mutex g_typed_lock;
+std::string g_typed;
+constexpr size_t kMaxTyped = 16;
+constexpr uint32_t kLastAscii = 0x7F;  // the game's font has nothing past it
 
 uint64_t NowMs() {
     auto since = std::chrono::steady_clock::now().time_since_epoch();
@@ -288,6 +295,7 @@ bool Mouse(int vk) {
 }
 bool Play() { return NowMs() - g_take_ms < kPlayMs; }
 bool KeyCaptureUp() { return NowMs() - g_capture_ms <= kCaptureMs; }
+bool Typing() { return NowMs() - g_typing_ms < kPlayMs; }
 
 // the cursor shows in the game's menus only while the keyboard and mouse are in use
 void SetKeyboard(bool on) {
@@ -360,7 +368,8 @@ void LimitDiagonal(float* values) {
     values[kStrafe] = std::copysign(across * scale / kStrafeRate, strafe);
 }
 
-Use PressActions(const Binds& binds, bool menu, float* values) {
+// while typing, only the pause key acts, backing out of the keyboard
+Use PressActions(const Binds& binds, bool menu, bool typing, float* values) {
     static bool pause_held;
     static bool pause_backs;
     bool pause = false;
@@ -369,6 +378,7 @@ Use PressActions(const Binds& binds, bool menu, float* values) {
     for (size_t i = 0; i < kCount; i++) {
         const Target& t = kActions[i];
         if (t.value == kHostKey || t.value == kImageKey) continue;
+        if (typing && t.value != kStart) continue;
         if (!std::any_of(binds[i].begin(), binds[i].end(), Down)) continue;
         use.any = true;
         if (t.value == kWalk) continue;
@@ -407,7 +417,8 @@ Use Press(float* values, bool menu) {
         binds = g_binds;
     }
     if (!UpdateSettle(binds)) return {};
-    Use use = PressActions(binds, menu, values);
+    bool typing = Typing();
+    Use use = PressActions(binds, menu, typing, values);
     if (use.any || std::any_of(std::begin(kFixed), std::end(kFixed), Down)) SetKeyboard(true);
     // in the game's menus the wheel scrolls and the right button backs out, as on the siblings
     if (g_menu) {
@@ -420,11 +431,12 @@ Use Press(float* values, bool menu) {
     }
     // the arrows, kFixed's first four, are the menus' directions in their order
     for (int i = 0; i < 4; i++) values[kMenuUp + i] += float(Down(kFixed[i]));
-    if (Down(VK_RETURN)) {
+    // typing, Enter finishes the name and Backspace deletes (WM_CHAR)
+    if (Down(VK_RETURN) && !typing) {
         values[kAccept] += 1.0f;
         values[kAny] += 1.0f;
     }
-    if (Down(VK_BACK)) {
+    if (Down(VK_BACK) && !typing) {
         values[kBack] += 1.0f;
         values[kAny] += 1.0f;
     }
@@ -464,6 +476,26 @@ void OnRawInput(void* handle) {
         g_dx += m.lLastX;
         g_dy += m.lLastY;
     }
+}
+
+void OnChar(uint32_t c) {
+    if (!Typing() || c > kLastAscii) return;
+    SetKeyboard(true);
+    std::lock_guard lock(g_typed_lock);
+    if (g_typed.size() < kMaxTyped) g_typed += char(c);
+}
+
+void SetTyping() {
+    if (!Typing()) {
+        std::lock_guard lock(g_typed_lock);
+        g_typed.clear();
+    }
+    g_typing_ms = NowMs();
+}
+
+std::string TakeTyped() {
+    std::lock_guard lock(g_typed_lock);
+    return std::exchange(g_typed, {});
 }
 
 void Settle() {

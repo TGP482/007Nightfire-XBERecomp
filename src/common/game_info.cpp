@@ -85,6 +85,9 @@ bool Message(void* hwnd, uint32_t msg, uintptr_t wp, intptr_t lp, intptr_t* resu
         case WM_INPUT:
             input::OnRawInput(reinterpret_cast<void*>(lp));
             return false;
+        case WM_CHAR:
+            input::OnChar(uint32_t(wp));
+            return false;
         case WM_ACTIVATE:
             if (LOWORD(wp) == WA_INACTIVE) input::Settle();
             return false;

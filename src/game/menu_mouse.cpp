@@ -8,6 +8,7 @@
 #include "common/mouse_keyboard.h"
 #include "core/log.h"
 #include "game/main_menu.h"
+#include "game/name_entry.h"
 #include "xdk/hle.h"
 
 // The game's menus run on a pointer of their own: each page update (0x95A80) first focuses the widget under the
@@ -349,7 +350,10 @@ X86_FUNC(sub_00095A80) {
     bool current = page == R32(record + kRecordPage);
     uint32_t id = R32(page + kId);
     if (current && (id == kMainMenuId || id == kTitleId)) g_main_menu = page;
-    if (input && current) Point(ctx, record, page);
+    if (input && current) {
+        Point(ctx, record, page);
+        game::UpdateNameEntry(ctx, page);
+    }
     __imp__sub_00095A80(ctx, base);
 }
 
