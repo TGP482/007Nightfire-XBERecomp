@@ -494,7 +494,7 @@ bool TakeMouse(float& dx, float& dy) {
     bool stale = now - g_take_ms.exchange(now) >= kPlayMs;
     int x = g_dx.exchange(0);
     int y = g_dy.exchange(0);
-    if ((!x && !y) || stale || !Active()) return false;
+    if ((!x && !y) || stale || g_menu || !Active()) return false;  // menu moves go to its cursor
     const game::Options& o = game::Opt();
     dx = float(o.invert_mouse_x ? -x : x) * o.mouse_sensitivity;
     dy = float(o.invert_mouse ? -y : y) * o.mouse_vertical_sensitivity;
