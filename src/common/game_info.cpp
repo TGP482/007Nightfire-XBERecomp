@@ -226,6 +226,9 @@ struct FloatOption {
     const char* key;
     float Options::*value;
 };
+// the max frame rate is the display's refresh rate until the player sets one, not the runtime's 60
+bool g_fps_cap_saved = false;
+
 constexpr FloatOption kFloats[] = {
     {"mouse_sensitivity", &Options::mouse_sensitivity},
     {"mouse_vertical_sensitivity", &Options::mouse_vertical_sensitivity},
@@ -254,6 +257,13 @@ void Load(const void* table) {
             if (auto v = value.value<std::string>()) o.keys[std::string(id.str())] = *v;
     LoadPlayers(t, o.players);
     audio::SetOutputMode(o.audio_output);
+    g_fps_cap_saved = t.contains("fps_cap");
+}
+
+// after the settings load, which leaves the runtime's own when there is no settings file
+void Init() {
+    if (!g_fps_cap_saved) app::Get().fps_cap = app::kFpsCapRefresh;
+    input::LoadBindings();
 }
 
 void Save(void* table) {
@@ -319,7 +329,7 @@ const app::GameInfo app::kGame = {
                 {"ambient_occlusion", nullptr, &game::Opt().ambient_occlusion}},  // game settings kept in the settings file
     .load = game::Load,                     // reads more from the settings file's toml::table
     .save = game::Save,                     // writes more into it
-    .init = input::LoadBindings,            // after the settings load, before the window and boot
+    .init = game::Init,                     // after the settings load, before the window and boot
     .loaded = nullptr,                      // image in memory, before its entry point runs
     .window = input::StartMouse,            // the game window is up
     .message = game::Message,               // window messages first; true takes one

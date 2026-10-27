@@ -869,6 +869,7 @@ void RestoreDefaults(int page) {
     std::string join_ip = s.join_ip;
     s = Settings{};
     s.join_ip = join_ip;
+    s.fps_cap = kFpsCapRefresh;
     game::Opt().skip_intros = game::Options{}.skip_intros;
     game::Opt().fov = game::Options{}.fov;
     game::Opt().viewmodel_fov = game::Options{}.viewmodel_fov;
