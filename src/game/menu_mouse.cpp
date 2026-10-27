@@ -87,15 +87,18 @@ constexpr float kNarrow = 0.75f;
 constexpr float kFrameWidth = 640.0f;
 constexpr float kFrameHeight = 480.0f;
 constexpr int kMaxWidgets = 256;
-// the main menu page and its button legend text
+// the main menu page and its button legend text; Escape there goes back to the title page (0x854C0's), which shows the
+// watermark too
 constexpr uint32_t kMainMenuId = 0x40000002;
+constexpr uint32_t kTitleId = 0x40000009;
 constexpr uint32_t kLegendId = 0x10000001;
 // the pause page's tabs by sub, RECOMP's last (options_menu.cpp)
 constexpr uint32_t kPauseId = 0x4000004B;
 constexpr uint32_t kPauseWidgets = 0x10000028;
 constexpr uint32_t kPauseTabs[] = {0, 1, 3, 4, 0x11};
 
-uint32_t g_main_menu = 0;  // the main menu page while it takes input, until the menus' next run
+uint32_t g_main_menu = 0;  // the main menu or title page while it takes input, until the menus' next run
+game::LegendRow g_main_menu_row;  // the main menu's legend as last seen, for a title page without one
 
 struct Rect {
     int x;
@@ -344,7 +347,8 @@ X86_FUNC(sub_00095A80) {
     uint32_t page = R32(ctx.esp + 8);
     bool input = G<uint8_t>(ctx.esp + 12) != 0;
     bool current = page == R32(record + kRecordPage);
-    if (current && R32(page + kId) == kMainMenuId) g_main_menu = page;
+    uint32_t id = R32(page + kId);
+    if (current && (id == kMainMenuId || id == kTitleId)) g_main_menu = page;
     if (input && current) Point(ctx, record, page);
     __imp__sub_00095A80(ctx, base);
 }
@@ -359,8 +363,11 @@ game::LegendRow game::TakeMainMenuLegend() {
         if (TypeOf(w) != kText || R32(w + kId) != kLegendId) continue;
         Rect p = RectOf(page);
         Rect r = RectOf(w);
-        return {true, float(p.x), ViewTop() + float(p.y + r.y), float(r.h)};
+        game::LegendRow row = {true, float(p.x), ViewTop() + float(p.y + r.y), float(r.h)};
+        if (R32(page + kId) == kMainMenuId) g_main_menu_row = row;
+        return row;
     }
+    if (R32(page + kId) == kTitleId) return g_main_menu_row;
     static bool logged = false;
     if (!logged) LOGR("watermark: no button legend on the main menu page %08X", page);
     logged = true;

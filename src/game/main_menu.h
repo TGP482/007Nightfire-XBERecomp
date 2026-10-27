@@ -3,7 +3,7 @@
 // the main menu, from menu_mouse.cpp
 namespace game {
 
-// its button legend row in frame pixels (640x480), while the main menu takes input this frame
+// its button legend row in frame pixels (640x480), while the main menu or the title page takes input this frame
 struct LegendRow {
     bool shown = false;
     float left = 0.0f;  // the page's own left edge, which moves when the page slides
