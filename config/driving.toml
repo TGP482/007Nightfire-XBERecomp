@@ -729,12 +729,7 @@ at = 0x5F713  # lifetime +0x90
 call = "DrivingTickless"
 on_true = 0x5F714
 
-# explosions, grenades, projectiles, lifts and timed props count whole ticks
-[[hook]]
-at = 0x5D0A0  # an explosion hits once per tick
-call = "DrivingTickless"
-on_true = 0x5D39C
-
+# grenades, projectiles, lifts and timed props count whole ticks
 [[hook]]
 at = 0x5D805  # grenade lifetime +0x6C8
 call = "DrivingTickless"
