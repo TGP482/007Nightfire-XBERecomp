@@ -31,13 +31,19 @@ using Pressed = app::RecompPages::Pressed;
 constexpr uint32_t kRenderer = 0x18;
 constexpr uint32_t kFirstMissionLine = 0x110;   // CONTINUE, RESTART then QUIT, one line apart
 constexpr uint32_t kSecondMissionLine = 0x114;
+constexpr uint32_t kThirdMissionLine = 0x118;
 constexpr uint32_t kStockTabs[] = {0x11C, 0x120, 0x128, 0x12C};  // MISSION, OBJECTIVES, CONTROLS, SCORE
 constexpr uint32_t kChangePagePicture = 0x1FC;  // the dpad left and right in the legend
 constexpr uint32_t kTab = 0x470;
 constexpr uint32_t kMissionLine = 0x474;  // the selected one
-constexpr uint32_t kConfirmingQuit = 0x484;
+constexpr uint32_t kConfirmingQuit = 0x484;  // 0, or the YES or NO a RESTART or QUIT asks with selected
+constexpr uint32_t kYesLine = 0x20C;          // their text objects, centred one above the other
+constexpr uint32_t kNoLine = 0x210;
+constexpr uint32_t kYes = 1;
+constexpr uint32_t kNo = 2;
 constexpr uint32_t kObjectivesHeld = 0x488;  // OBJECTIVES keeps the dpad while 1
 constexpr uint32_t kHidesTabs = 0x454;       // byte
+constexpr uint32_t kCentreX = 0x448;         // float, the centred lines' middle
 constexpr uint32_t kMode = 0x310;
 constexpr uint32_t kTablessMode = 0x18577;  // its page 5, no tabs
 constexpr uint32_t kMissionTab = 0;
@@ -64,6 +70,7 @@ constexpr uint32_t kStringText = 0xE3AF0;  // cdecl (string id): its text
 constexpr uint32_t kSetFont = 0xD6EB0;     // (text object): its font, colour and place
 constexpr uint32_t kSetScale = 0xD61E0;    // (x scale, y scale)
 constexpr uint32_t kMeasure = 0xD5AD0;     // (text): its width in st(0)
+constexpr uint32_t kMeasureHeight = 0xD5B00;  // (text): its height in st(0)
 constexpr uint32_t kDrawText = 0xD6520;    // (text, x, y)
 constexpr uint32_t kPlaySound = 0x11E010;  // cdecl (8, sound, bank, 2), as the menu's dpad plays it
 constexpr uint32_t kSoundToggle = 0x1A000C;  // "SFX_Toggle"
@@ -80,6 +87,10 @@ constexpr uint32_t kLineColour = 0x23F4D8;    // a mission line not selected
 constexpr uint32_t kDisplay = 0x1EBFF4;       // +0x4C set on a widescreen output
 constexpr uint32_t kDisplayWide = 0x4C;
 constexpr uint32_t kWideScale = 0x19FEA8;     // the widths' scale then
+constexpr uint32_t kDisplayWidth = 0x40;      // int
+constexpr uint32_t kDisplayHeight = 0x44;
+constexpr uint32_t kDisplayFit = 0x48;
+constexpr uint32_t kFitFill = 2;
 constexpr float kTabsLeft = 80.0f;
 constexpr float kTabsSpan = 485.0f;  // the room the tabs are spread over, past their labels
 constexpr float kTabRaise = 4.0f;    // below the first tab object's y
@@ -167,13 +178,17 @@ Pen PenFor(uint32_t menu, uint32_t font_object) {
     return {R32(menu + kRenderer), R32(menu + font_object), widths};
 }
 
-float Measure(X86Context& ctx, const Pen& pen, uint32_t text) {
+float MeasureBy(X86Context& ctx, const Pen& pen, uint32_t measure, uint32_t text) {
     CallThis(ctx, kSetFont, pen.renderer, {pen.font});
     CallThis(ctx, kSetScale, pen.renderer, {R32(kTextScale), R32(kTextScale)});
-    CallThis(ctx, kMeasure, pen.renderer, {text});
-    double width = X87_ST(0);
+    CallThis(ctx, measure, pen.renderer, {text});
+    double size = X87_ST(0);
     x87_pop(ctx);
-    return float(width) * pen.widths;
+    return float(size);
+}
+
+float Measure(X86Context& ctx, const Pen& pen, uint32_t text) {
+    return MeasureBy(ctx, pen, kMeasure, text) * pen.widths;
 }
 
 void Draw(X86Context& ctx, const Pen& pen, uint32_t text, float x, float y, uint32_t colour) {
@@ -360,8 +375,9 @@ bool TakeMessage(X86Context& ctx, uint32_t menu, uint32_t message) {
     return true;
 }
 
-// The mouse: the pointer picks the line under it (a mission line or a RECOMP row) as the dpad would and a click on a
-// tab shows its page. A click on a line presses A and the right button presses B (keyboard.cpp).
+// The mouse: the pointer picks the line under it (a mission line, the YES or NO a RESTART or QUIT asks, or a RECOMP
+// row) as the dpad would and a click on a tab shows its page. A click on a line presses A and the right button
+// presses B (keyboard.cpp). Each line is hit where the text draw puts its text.
 
 constexpr int64_t kShownMs = 100;  // drawn this recently, the pause is up
 std::atomic<int64_t> g_drawn_ms{0};
@@ -404,48 +420,217 @@ bool ReadPointer(Pointer& p) {
     return true;
 }
 
-// the line under the pointer counted from the first, -1 when none of the count is
-int LineAt(float y, float first_y, float pitch, int count) {
-    if (pitch <= 0.0f || y < first_y) return -1;
-    int line = int((y - first_y) / pitch);
-    return line < count ? line : -1;
+// Where the text draw (0xD6520) puts a text on the frame: on a 4:3 output 0.9 the size inside the safe area, on a
+// widescreen one its glyphs 3/4 as wide, and in the fill mode its place 3/4 as far from the middle too.
+
+constexpr float kSafeScale = 0.9f;
+constexpr float kSafeMargin = 0.05f;
+constexpr float kSafeLift = 10.0f / kFrameHeight;
+constexpr float kWideNarrow = 0.75f;
+constexpr float kWideMiddle = 320.0f;
+
+struct Box {
+    float left;
+    float top;
+    float right;
+    float bottom;
+};
+
+Box Placed(float x, float y, float width, float height) {
+    uint32_t display = R32(kDisplay);
+    if (!display) return {x, y, x + width, y + height};
+    float frame_width = float(G<int32_t>(display + kDisplayWidth));
+    float frame_height = float(G<int32_t>(display + kDisplayHeight));
+    float rows = frame_height / kFrameHeight;  // the y and heights are on 480 lines
+    y *= rows;
+    height *= rows;
+    if (!G<uint8_t>(display + kDisplayWide)) {
+        x = x * kSafeScale + frame_width * kSafeMargin;
+        y = y * kSafeScale + frame_height * (kSafeMargin + kSafeLift);
+        width *= kSafeScale;
+        height *= kSafeScale;
+    } else if (R32(display + kDisplayFit) == kFitFill) {
+        x = kWideMiddle + (x - kWideMiddle) * kWideNarrow;
+        width *= kWideNarrow;
+    } else {
+        width *= kWideNarrow;
+        height *= kWideNarrow;
+    }
+    float across = kFrameWidth / frame_width;
+    float down = kFrameHeight / frame_height;
+    return {x * across, y * down, (x + width) * across, (y + height) * down};
+}
+
+Box TextBox(X86Context& ctx, const Pen& pen, uint32_t text, float x, float y) {
+    float width = MeasureBy(ctx, pen, kMeasure, text);
+    float height = MeasureBy(ctx, pen, kMeasureHeight, text);
+    return Placed(x, y, width, height);
+}
+
+// a line centred as 0xD9370 places it
+Box CentredBox(X86Context& ctx, uint32_t menu, uint32_t object, uint32_t text) {
+    Pen pen = PenFor(menu, object);
+    float x = G<float>(menu + kCentreX) - MeasureBy(ctx, pen, kMeasure, text) * 0.5f;
+    return TextBox(ctx, pen, text, x, ObjectY(menu, object));
+}
+
+Box Joined(const Box& a, const Box& b) {
+    float left = std::min(a.left, b.left);
+    float top = std::min(a.top, b.top);
+    return {left, top, std::max(a.right, b.right), std::max(a.bottom, b.bottom)};
+}
+
+bool Inside(const Box& box, const Pointer& p) {
+    return p.x >= box.left && p.x < box.right && p.y >= box.top && p.y < box.bottom;
+}
+
+uint32_t StringText(X86Context& ctx, uint32_t id) { return kernel::CallGuest(ctx, kStringText, {id}); }
+
+uint32_t ObjectText(X86Context& ctx, uint32_t menu, uint32_t object) {
+    return StringText(ctx, R32(R32(menu + object) + kObjectString));
+}
+
+// the mission lines' labels, as the MISSION page (0xDD4B9) and the tabless one (0xDE85D) word them
+constexpr uint32_t kMissionLineObjects[] = {kFirstMissionLine, kSecondMissionLine, kThirdMissionLine};
+constexpr uint32_t kTablessRestartString = 0x2268;
+constexpr uint32_t kTablessRestartNoTabsString = 0x2277;
+constexpr uint32_t kQuitNoTabsString = 0x2201;
+constexpr int kRestartLine = 1;
+constexpr int kQuitLine = 2;
+
+uint32_t MissionLineText(X86Context& ctx, uint32_t menu, int line) {
+    bool no_tabs = G<uint8_t>(menu + kHidesTabs) != 0;
+    bool tabless = R32(menu + kTab) == kTablessTab;
+    if (line == kRestartLine && tabless) {
+        return StringText(ctx, no_tabs ? kTablessRestartNoTabsString : kTablessRestartString);
+    }
+    if (line == kQuitLine && no_tabs) return StringText(ctx, kQuitNoTabsString);
+    return ObjectText(ctx, menu, kMissionLineObjects[line]);
+}
+
+// The boxes reach halfway to their neighbours, and the end ones as far past the ends, so no gap between lines is dead.
+
+float HalfGap(float gap) { return std::max(gap, 0.0f) * 0.5f; }
+
+// one under another, a list's lines evenly apart
+void SpreadDown(std::vector<Box>& boxes) {
+    if (boxes.size() < 2) return;
+    float half = HalfGap(boxes[1].top - boxes[0].bottom);
+    for (Box& b : boxes) b = {b.left - half, b.top - half, b.right + half, b.bottom + half};
+}
+
+// side by side, the tabs unevenly apart; they reach half their height up and down
+void SpreadAcross(std::vector<Box>& boxes) {
+    size_t count = boxes.size();
+    if (count < 2) return;
+    std::vector<Box> was = boxes;
+    for (size_t i = 0; i < count; i++) {
+        float before = i > 0 ? was[i].left - was[i - 1].right : was[i + 1].left - was[i].right;
+        float after = i + 1 < count ? was[i + 1].left - was[i].right : before;
+        float rise = (was[i].bottom - was[i].top) * 0.5f;
+        boxes[i] = {was[i].left - HalfGap(before), was[i].top - rise, was[i].right + HalfGap(after),
+                    was[i].bottom + rise};
+    }
+}
+
+// the index of the box under the pointer, -1 when none is
+int BoxAt(const std::vector<Box>& boxes, const Pointer& p) {
+    for (size_t i = 0; i < boxes.size(); i++) {
+        if (Inside(boxes[i], p)) return int(i);
+    }
+    return -1;
 }
 
 void ClickTab(X86Context& ctx, uint32_t menu, const Pointer& p) {
     if (!p.click || !TabsShown(menu) || !TabsMove(menu)) return;
-    TabStrip strip = LayTabs(ctx, menu, PenFor(menu, kStockTabs[0]));
-    float pitch = ObjectY(menu, kSecondMissionLine) - ObjectY(menu, kFirstMissionLine);
-    if (p.y < strip.y || p.y >= strip.y + pitch) return;
-    for (int i = 0; i < kTabCount; i++) {
-        const TabLabel& label = strip.labels[i];
-        if (p.x < label.x || p.x >= label.x + label.width) continue;
-        if (R32(menu + kTab) != uint32_t(i)) SelectTab(ctx, menu, uint32_t(i));
-        return;
+    Pen pen = PenFor(menu, kStockTabs[0]);
+    TabStrip strip = LayTabs(ctx, menu, pen);
+    std::vector<Box> boxes;
+    for (const TabLabel& label : strip.labels) boxes.push_back(TextBox(ctx, pen, label.text, label.x, strip.y));
+    SpreadAcross(boxes);
+    int tab = BoxAt(boxes, p);
+    if (tab >= 0 && R32(menu + kTab) != uint32_t(tab)) SelectTab(ctx, menu, uint32_t(tab));
+}
+
+// the answer under the pointer, 0 when neither is
+uint32_t AnswerAt(X86Context& ctx, uint32_t menu, const Pointer& p) {
+    std::vector<Box> boxes = {
+        CentredBox(ctx, menu, kYesLine, ObjectText(ctx, menu, kYesLine)),
+        CentredBox(ctx, menu, kNoLine, ObjectText(ctx, menu, kNoLine)),
+    };
+    SpreadDown(boxes);
+    constexpr uint32_t kAnswers[] = {kYes, kNo};
+    int at = BoxAt(boxes, p);
+    return at < 0 ? 0 : kAnswers[at];
+}
+
+void PointAnswer(X86Context& ctx, uint32_t menu, const Pointer& p) {
+    uint32_t answer = AnswerAt(ctx, menu, p);
+    if (answer == 0) return;
+    if (p.click) g_accepting = true;
+    if ((!p.moved && !p.click) || R32(menu + kConfirmingQuit) == answer) return;
+    kernel::W32(menu + kConfirmingQuit, answer);
+    PlayToggle(ctx);
+}
+
+// the mission line under the pointer, -1 when none is
+int MissionLineAt(X86Context& ctx, uint32_t menu, const Pointer& p) {
+    int lowest = R32(menu + kMode) == kTablessMode ? 1 : 0;  // the tabless page has no CONTINUE
+    std::vector<Box> boxes;
+    for (int line = lowest; line < kMissionLines; line++) {
+        uint32_t object = kMissionLineObjects[line];
+        boxes.push_back(CentredBox(ctx, menu, object, MissionLineText(ctx, menu, line)));
     }
+    SpreadDown(boxes);
+    int at = BoxAt(boxes, p);
+    return at < 0 ? -1 : lowest + at;
 }
 
 void PointMissionLine(X86Context& ctx, uint32_t menu, const Pointer& p) {
     uint32_t tab = R32(menu + kTab);
-    if ((tab != kMissionTab && tab != kTablessTab) || R32(menu + kConfirmingQuit) != 0) return;
-    float first = ObjectY(menu, kFirstMissionLine);
-    float pitch = ObjectY(menu, kSecondMissionLine) - first;
-    int line = LineAt(p.y, first, pitch, kMissionLines);
-    int lowest = R32(menu + kMode) == kTablessMode ? 1 : 0;  // the tabless page has no CONTINUE
-    if (line < lowest) return;
+    if (tab != kMissionTab && tab != kTablessTab) return;
+    if (R32(menu + kConfirmingQuit) != 0) {
+        if (tab == kMissionTab) PointAnswer(ctx, menu, p);
+        return;
+    }
+    int line = MissionLineAt(ctx, menu, p);
+    if (line < 0) return;
     if (p.click) g_accepting = true;
     if ((!p.moved && !p.click) || R32(menu + kMissionLine) == uint32_t(line)) return;
     kernel::W32(menu + kMissionLine, uint32_t(line));
     PlayToggle(ctx);
 }
 
+// a RECOMP row's label and value, as DrawPage lays them
+Box RowBox(X86Context& ctx, const Pen& pen, const app::RecompPages::Line& line, uint32_t slot, float y) {
+    Box box = TextBox(ctx, pen, GuestText(slot, line.label), kLinesLeft, y);
+    if (line.value.empty()) return box;
+    uint32_t value = GuestText(slot + kMaxText, line.value);
+    return Joined(box, TextBox(ctx, pen, value, kLinesRight - Measure(ctx, pen, value), y));
+}
+
+// the RECOMP row under the pointer, -1 when none is
+int RecompLineAt(X86Context& ctx, uint32_t menu, const Pointer& p) {
+    std::vector<app::RecompPages::Line> lines = g_page.pages.Lines();
+    Lines layout = LinesFor(menu);
+    Pen pen = PenFor(menu, kFirstMissionLine);
+    int end = std::min(int(lines.size()), g_page.top + layout.shown);
+    std::vector<Box> boxes;
+    for (int i = g_page.top; i < end; i++) {
+        uint32_t slot = kLinesAt + uint32_t(i - g_page.top) * 2 * kMaxText;
+        float y = layout.first_y + layout.pitch * float(i - g_page.top);
+        boxes.push_back(RowBox(ctx, pen, lines[size_t(i)], slot, y));
+    }
+    SpreadDown(boxes);
+    int at = BoxAt(boxes, p);
+    return at < 0 ? -1 : g_page.top + at;
+}
+
 void PointRecompLine(X86Context& ctx, uint32_t menu, const Pointer& p) {
     if (!RecompShown(menu)) return;
-    Lines layout = LinesFor(menu);
-    int count = int(g_page.pages.Lines().size());
-    int shown = LineAt(p.y, layout.first_y, layout.pitch, std::min(layout.shown, count - g_page.top));
-    if (shown < 0) return;
+    int line = RecompLineAt(ctx, menu, p);
+    if (line < 0) return;
     if (p.click) g_accepting = true;
-    int line = g_page.top + shown;
     if ((!p.moved && !p.click) || g_page.line == line) return;
     g_page.line = line;
     PlayToggle(ctx);
