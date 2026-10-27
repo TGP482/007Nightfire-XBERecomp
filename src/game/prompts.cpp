@@ -14,7 +14,8 @@
 // PC prompts: while the keyboard and mouse drive the menus, the button legends name the keys, key first, as
 // "(ENTER) Select". The game draws a button as "~" and a code inside its text (0x69C50 lays out and measures text),
 // so the codes are swapped for key names there. The controller layout in the pause menu keeps its buttons: its
-// lines hold one code each, legends several apart or "Press ~". The title screen's line is a legend too.
+// lines hold one code each, legends several apart or "Press ~". Elsewhere in the menus a legend can be one button
+// first, as the stats screen's "~B Back". The title screen's line is a legend too.
 namespace {
 
 using kernel::G;
@@ -77,7 +78,11 @@ std::string KeyFor(char code) {
     }
 }
 
-bool Legend(std::string_view text) { return text.rfind("Press ~", 0) == 0 || text.find("  ~") != text.npos; }
+bool Legend(std::string_view text) {
+    if (text.rfind("Press ~", 0) == 0 || text.find("  ~") != text.npos) return true;
+    bool one_button = text.size() > 3 && text[0] == kGlyph && text[2] == ' ' && text.find(kGlyph, 1) == text.npos;
+    return one_button && !game::PauseMenuUp();
+}
 
 struct Rewritten {
     std::string text;
