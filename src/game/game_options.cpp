@@ -6,7 +6,8 @@
 #include "xdk/hle.h"
 
 // Player 1's options, as the main menu's Advanced Options (0x8D0F0) and AV Options (0x8D7A0) pages set them. The
-// music update applies its volume each frame (0xC9030), the effects read theirs as they play.
+// music update applies its volume each frame (0xC9030), the effects read theirs as they play. Subtitles only stop new
+// lines (0xD1D70), so the ones showing are ended when they go off.
 namespace {
 
 using game::GameOption;
@@ -62,9 +63,37 @@ bool CanSave() {
     return loaded && idle && G<uint8_t>(kSaveAllowed);
 }
 
+// the messages 0xD1D70 queues, +4 the next; a subtitle's kind is 4 (or 5, which 0xD1D70 makes of some 4s), and it
+// ends once its time is spent, as the game ends messages itself (0xD1E4E)
+constexpr uint32_t kSubtitles = 0x1F6614;
+constexpr uint32_t kMessages = 0x29AC04;
+constexpr uint32_t kNextMessage = 0x4;
+constexpr uint32_t kMessageTime = 0x18;  // float, 60 fps frames left
+constexpr uint32_t kMessageKind = 0x1C;  // byte
+constexpr uint8_t kSubtitleKinds[] = {4, 5};
+constexpr float kSpent = -1.0f;
+
+bool Subtitle(uint32_t message) {
+    uint8_t kind = kernel::G<uint8_t>(message + kMessageKind);
+    return kind == kSubtitleKinds[0] || kind == kSubtitleKinds[1];
+}
+
+void EndSubtitles() {
+    for (uint32_t m = kernel::R32(kMessages); m; m = kernel::R32(m + kNextMessage))
+        if (Subtitle(m)) kernel::G<float>(m + kMessageTime) = kSpent;
+}
+
+void UpdateSubtitles() {
+    static bool shown = true;
+    bool on = kernel::R32(kSubtitles) != 0;
+    if (shown && !on) EndSubtitles();
+    shown = on;
+}
+
 }  // namespace
 
 void game::SaveChangedOptions(X86Context& ctx) {
+    UpdateSubtitles();
     if (!g_options_changed || app::MenuOpen() || !CanSave()) return;
     g_options_changed = false;
     kernel::CallGuest(ctx, kCopyToProfile, {kPlayer1, kernel::R32(kProfileSlot)});
