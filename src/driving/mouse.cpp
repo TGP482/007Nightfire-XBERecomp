@@ -1,7 +1,6 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <initializer_list>
 
 #include "app/app.h"
 #include "common/gyro.h"
@@ -46,8 +45,10 @@ constexpr uint32_t kAiming = 0xC;  // byte in its input, set by 0x8A310 while th
 // the aim's sight, turns from the view's middle, which 0x857D0 moves within its dead zone and draws (+0x1D0, +0x1D4)
 constexpr uint32_t kCharacterSightPitch = 0x1E0;
 constexpr uint32_t kCharacterSightYaw = 0x1E4;
-// the camera type's record (0x973C0, thiscall): the dead zone, turns on the unzoomed view
-constexpr uint32_t kCameraRecord = 0x973C0;
+// the character's camera type record, as 0x857D0 finds it: the dead zone, turns on the unzoomed view
+constexpr uint32_t kCameraTypes = 0x1EC358;
+constexpr uint32_t kCameraTypeSize = 0x100;
+constexpr uint32_t kCharacterCameraType = 0x27C;  // signed byte
 constexpr uint32_t kDeadZonePitch = 0x40;
 constexpr uint32_t kDeadZoneYaw = 0x44;
 // of each turn the update keeps (0x60379), eased to the update; the mouse and gyro are divided by it to turn in full
@@ -78,12 +79,9 @@ LookTurn GyroTurn() {
     return {-yaw * kTurnsPerDegree, turn.pitch * kTurnsPerDegree};
 }
 
-uint32_t CameraRecord(X86Context& ctx, uint32_t character) {
-    uint32_t ecx = ctx.ecx;
-    ctx.ecx = character;
-    uint32_t record = kernel::CallGuest(ctx, kCameraRecord, std::initializer_list<uint32_t>{});
-    ctx.ecx = ecx;
-    return record;
+uint32_t CameraRecord(uint32_t character) {
+    int32_t type = G<int8_t>(character + kCharacterCameraType);
+    return R32(kCameraTypes) + uint32_t(type) * kCameraTypeSize;
 }
 
 // the value moved by step within its reach; what is left over
@@ -95,9 +93,9 @@ float StepWithin(float& value, float step, float reach) {
 }
 
 // while aiming the mouse moves the sight, and past the dead zone the view turns by the rest, as the sticks turn it
-LookTurn MoveSight(X86Context& ctx, uint32_t character, LookTurn mouse, float zoom) {
+LookTurn MoveSight(uint32_t character, LookTurn mouse, float zoom) {
     const game::Options& o = game::Opt();
-    uint32_t record = CameraRecord(ctx, character);
+    uint32_t record = CameraRecord(character);
     float& yaw = G<float>(character + kCharacterSightYaw);
     float& pitch = G<float>(character + kCharacterSightPitch);
     float across = mouse.across * o.aim_horizontal_sensitivity * zoom;
@@ -139,7 +137,7 @@ X86_FUNC(sub_000857D0) {
         LookTurn gyro = GyroTurn();
         float zoom = G<float>(character + kCharacterFov) / kUnzoomedFov;
         bool moved = mouse.across != 0.0f || mouse.up_down != 0.0f;
-        if (moved && G<uint8_t>(input + kAiming)) mouse = MoveSight(ctx, character, mouse, zoom);
+        if (moved && G<uint8_t>(input + kAiming)) mouse = MoveSight(character, mouse, zoom);
         G<float>(character + kCharacterYaw) += (mouse.across + gyro.across) * zoom;
         G<float>(character + kCharacterPitch) += (mouse.up_down + gyro.up_down) * zoom;
     }
