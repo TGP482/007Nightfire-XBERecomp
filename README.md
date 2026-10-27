@@ -34,10 +34,15 @@ The latest version of [007Nightfire-XBERecomp](https://github.com/TGP482/007Nigh
 - **Subpixel Morphological Antialiasing (SMAA)** - Enables SMAA to smooth jagged edges across the whole frame with a softer image. SMAA also smooths alpha-tested edges such as fences and foliage, and can be combined with MSAA.
 - **Anisotropic Filtering** - Forces the selected anisotropic filtering level on all textures.
 
+### Textures
+- **Texture Replacement** - Replaces the game's textures with the `.dds` or `.png` images in the `textures\replacement` folder beside the exe.
+- **Texture Dumping** - Saves every texture the game uses into the `textures\dumps` folder beside the exe as you play.
+- **Dump Format** - Choose between PNG or DDS, which keeps the original compression and mipmaps.
+
 ### Input
-- **Mouse and Keyboard** - Full keyboard and mouse support with raw input, adjustable horizontal and vertical sensitivity, separate aim sensitivity, inverted look and rebindable controls, including Toggle HUD and Walk keys.
-- **Controller** - Controller with SDL3 support, adjustable horizontal and vertical sensitivity, separate aim sensitivity and an inverted X axis.
-- **Gyro Aiming** - Adds gyro aiming for controllers with motion sensors, such as the DualSense, DualShock 4 and Switch Pro Controller, with adjustable sensitivity. Works together with the right stick.
+- **Mouse and Keyboard** - Full keyboard and mouse support with raw input.
+- **Controller** - Controller with SDL3 support.
+- **Gyro Aiming** - Adds gyro aiming for controllers with motion sensors, such as the DualSense, DualShock 4 and Switch Pro Controller. Works together with the right stick.
 
 ### General
 - **Skip Intro** - Skips the intro logos and the intro movie.

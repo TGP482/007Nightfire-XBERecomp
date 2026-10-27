@@ -119,6 +119,7 @@ constexpr Target kActions[] = {
     {{"menu_y", "MENU BUTTON Y", "Y"}, kMenuY, 1},
     {{"settings_panel", "SETTINGS PANEL", "F10"}, kHostKey, 0},
     {{"toggle_hud", "TOGGLE HUD", ""}, kHostKey, 0},
+    {{"toggle_textures", "TOGGLE TEXTURE REPLACEMENT", ""}, kHostKey, 0},
     {{"look_up", "LOOK UP", "Up"}, kPitch, 1},
     {{"look_down", "LOOK DOWN", "Down"}, kPitch, -1},
     {{"look_left", "LOOK LEFT", "Left"}, kTurn, -1},
@@ -156,6 +157,7 @@ constexpr size_t HostAction(std::string_view id) {
 }
 constexpr size_t kPanelAction = HostAction("settings_panel");
 constexpr size_t kHudAction = HostAction("toggle_hud");
+constexpr size_t kTexturesAction = HostAction("toggle_textures");
 constexpr size_t kWalkAction = HostAction("walk");
 struct Name {
     int vk;
@@ -628,5 +630,7 @@ int PressedKey() {
 bool PanelKey(int vk) { return HostKeyBound(kPanelAction, vk); }
 
 bool HudKey(int vk) { return HostKeyBound(kHudAction, vk); }
+
+bool TexturesKey(int vk) { return HostKeyBound(kTexturesAction, vk); }
 
 }  // namespace input

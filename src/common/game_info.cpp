@@ -45,6 +45,10 @@ bool PanelKeyDown(uint32_t msg, uintptr_t key, intptr_t lp, intptr_t* result) {
         g_hud_hidden = !g_hud_hidden;
         return Take(result);
     }
+    if (first_press && !app::MenuOpen() && input::TexturesKey(int(key))) {
+        app::ToggleTextureReplacement();
+        return Take(result);
+    }
     if (msg == WM_KEYDOWN && key == VK_ESCAPE && app::MenuOpen() && !app::Capturing()) {
         app::ToggleMenu();
         return Take(result);

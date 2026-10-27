@@ -331,6 +331,23 @@ std::string StepAo(Settings&, int step) {
 
 std::string StepAniso(Settings& s, int step) { return kAnisoNames[StepTable(kAnisoValues, s.aniso, step)]; }
 
+std::string StepTextureReplacement(Settings& s, int step) {
+    if (step) s.custom_textures = !s.custom_textures;
+    return OnOff(s.custom_textures);
+}
+
+std::string StepTextureDumping(Settings& s, int step) {
+    if (step) s.dump_textures = !s.dump_textures;
+    return OnOff(s.dump_textures);
+}
+
+constexpr uint32_t kDumpFormats[] = {0, 1};
+const char* const kDumpFormatNames[] = {"PNG", "DDS"};
+
+std::string StepDumpFormat(Settings& s, int step) {
+    return kDumpFormatNames[StepTable(kDumpFormats, s.texture_dump_format, step)];
+}
+
 std::string StepSkipIntros(Settings&, int step) {
     bool& on = game::Opt().skip_intros;
     if (step) on = !on;
@@ -561,6 +578,9 @@ enum RowId {
     kGyroButtonModeRow,
     kGyroRecenterRow,
     kGyroCalibrateRow,
+    kTextureReplacementRow,
+    kTextureDumpingRow,
+    kDumpFormatRow,
 };
 
 // in RowId order
@@ -608,6 +628,9 @@ constexpr StepFn kSteps[] = {
     StepGyroButtonMode,
     StepGyroRecenter,
     StepGyroCalibrate,
+    StepTextureReplacement,
+    StepTextureDumping,
+    StepDumpFormat,
 };
 
 bool Held(int id) { return id == kMonitorRow || id == kDisplayModeRow || id == kResolutionRow; }
@@ -672,6 +695,10 @@ constexpr Row kSettingsRows[] = {
     {Kind::Value, kPlayer2Row, "PLAYER 2"},
     {Kind::Value, kPlayer3Row, "PLAYER 3"},
     {Kind::Value, kPlayer4Row, "PLAYER 4"},
+    {Kind::Heading, -1, "TEXTURES"},
+    {Kind::Value, kTextureReplacementRow, "TEXTURE REPLACEMENT"},
+    {Kind::Value, kTextureDumpingRow, "TEXTURE DUMPING"},
+    {Kind::Value, kDumpFormatRow, "DUMP FORMAT"},
 };
 
 // the mouse rows, then a bind row for each keyboard and mouse action
@@ -1271,6 +1298,11 @@ void ToggleMenu() {
     CancelCapture();
     input::Settle();
     RefreshCursor();
+}
+
+void ToggleTextureReplacement() {
+    Get().custom_textures = !Get().custom_textures;
+    Save();
 }
 
 // ImGui sets the cursor only while the panel is open
