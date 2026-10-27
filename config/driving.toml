@@ -313,6 +313,12 @@ call = "DrivingFilmScaleLatch"
 at = 0x130A18
 call = "DrivingFilmScale"
 
+# a film's picture is drawn again until the next is due, so only the film plays at its rate (src/driving/film_rate.cpp)
+[[hook]]
+at = 0x130A5B
+call = "DrivingFilmRedraw"
+on_true = 0x130A18
+
 # ambient occlusion once a view's opaque passes are drawn (src/driving/ambient_occlusion.cpp)
 [[hook]]
 at = 0x8D04A
