@@ -373,6 +373,22 @@ at = 0xCD8BB
 call = "ParticleColourStep"
 on_true = 0xCD8DF
 
+# a falling particle with no room falls with no floor (src/game/particles.cpp)
+[[hook]]
+at = 0xCD5BA
+call = "ParticleWithoutRoom"
+on_true = 0xCD73B
+
+[[hook]]
+at = 0xCD632
+call = "ParticleWithoutRoom"
+on_true = 0xCD73B
+
+[[hook]]
+at = 0xCD68A
+call = "ParticleWithoutRoom"
+on_true = 0xCD6A3
+
 # a window's glass shards wait, fall and fade at their 60 fps speed (src/game/glass_shards.cpp)
 [[hook]]
 at = 0x1FC70
