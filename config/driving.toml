@@ -338,6 +338,11 @@ call = "DrivingTargetProjection"
 at = 0x8A490
 call = "DrivingCullFov"
 
+# the in-game cutscenes' cameras keep the game's angle (src/driving/fov.cpp)
+[[hook]]
+at = 0x8782E
+call = "DrivingCameraType"
+
 # real time updates: the audio clock and game time count whole console ticks (src/driving/frame_rate.cpp)
 [[hook]]
 at = 0x4DDD5
