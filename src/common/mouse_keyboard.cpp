@@ -21,6 +21,7 @@
 #include <windows.h>
 
 #include "app/app.h"
+#include "common/aspect.h"
 #include "common/menu.h"
 #include "common/options.h"
 
@@ -556,7 +557,7 @@ struct Shown {
 bool ShownFrame(Shown& s) {
     RECT r;
     if (!GetClientRect(g_hwnd, &r) || r.right <= 0 || r.bottom <= 0) return false;
-    float aspect = app::Widescreen() ? 16.0f / 9.0f : 4.0f / 3.0f;
+    float aspect = game::OutputAspect();
     float w = float(r.right);
     float h = float(r.bottom);
     s.width = std::min(w, h * aspect);

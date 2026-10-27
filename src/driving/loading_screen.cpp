@@ -1,4 +1,4 @@
-#include "app/app.h"
+#include "common/aspect.h"
 #include "xdk/hle.h"
 
 // The loading screen (0xE28A0, a timer callback while a mission loads) draws its picture's pieces and its dots as
@@ -8,7 +8,6 @@ namespace {
 
 using kernel::G;
 
-constexpr float kNarrow = 0.75f;  // 4:3 of a 16:9 frame
 constexpr float kFrameMiddle = 320.0f;
 // the sprite's arguments, cdecl (x, y, width, height, ...)
 constexpr uint32_t kSpriteX = 4;
@@ -29,10 +28,11 @@ X86_FUNC(sub_000E28A0) {
 // a sprite
 X86_EXTERN_FUNC(__imp__sub_00075F60);
 X86_FUNC(sub_00075F60) {
-    if (g_loading && app::Widescreen()) {
+    if (g_loading && game::Wide()) {
+        float share = game::NarrowShare();
         float& x = G<float>(ctx.esp + kSpriteX);
-        x = kFrameMiddle + (x - kFrameMiddle) * kNarrow;
-        G<float>(ctx.esp + kSpriteWidth) *= kNarrow;
+        x = kFrameMiddle + (x - kFrameMiddle) * share;
+        G<float>(ctx.esp + kSpriteWidth) *= share;
     }
     __imp__sub_00075F60(ctx, base);
 }

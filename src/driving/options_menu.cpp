@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "common/aspect.h"
 #include "common/menu.h"
 #include "common/mouse_keyboard.h"
 #include "common/recomp_pages.h"
@@ -412,8 +413,12 @@ bool ReadPointer(Pointer& p) {
         last_x = -1.0f;
         return false;
     }
-    p.x = fx * kFrameWidth;
-    p.y = fy * kFrameHeight;
+    // the pause draws in the HUD's 16:9 box (widescreen.cpp)
+    bool wide = game::Wide();
+    float box_width = wide ? game::WideBoxWidth() : 1.0f;
+    float box_height = wide ? game::WideBoxHeight() : 1.0f;
+    p.x = (0.5f + (fx - 0.5f) / box_width) * kFrameWidth;
+    p.y = (0.5f + (fy - 0.5f) / box_height) * kFrameHeight;
     p.moved = p.x != last_x || p.y != last_y;
     last_x = p.x;
     last_y = p.y;

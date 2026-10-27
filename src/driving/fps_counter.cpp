@@ -3,14 +3,16 @@
 #include <cstring>
 #include <initializer_list>
 
+#include "common/aspect.h"
 #include "common/options.h"
+#include "d3d/wide_box.h"
 #include "kernel/memory.h"
 #include "xdk/hle.h"
 
 // The frame rate, top left, in the pause menu's text font: Driving.xbe's HUD draw (0xE1970) runs every frame and
 // flushes the menu's text renderer as it goes; the counter is drawn and flushed after its last flush. The text draw
 // (0xD6520) puts text in the title safe area, or squeezes it to the middle 4:3 on a widescreen output; the counter
-// is placed so it lands where default.xbe's and SCDA's do, at the frame's corner.
+// is placed so it lands where default.xbe's and SCDA's do, at the frame's corner, out of the HUD's 16:9 box.
 namespace {
 
 using kernel::G;
@@ -93,8 +95,8 @@ Point Request(const Frame& frame, float x, float y) {
 }
 
 // the scale again each time: 0xD6520 leaves it scaled for the frame
-void DrawAt(X86Context& ctx, uint32_t renderer, float scale, uint32_t colour, Point at) {
-    CallRenderer(ctx, kSetScale, renderer, {Bits(scale), Bits(scale)});
+void DrawAt(X86Context& ctx, uint32_t renderer, float across, float scale, uint32_t colour, Point at) {
+    CallRenderer(ctx, kSetScale, renderer, {Bits(across), Bits(scale)});
     kernel::W32(renderer + kRendererColour, colour);
     CallRenderer(ctx, kDrawText, renderer, {FpsText(), Bits(at.x), Bits(at.y)});
 }
@@ -115,9 +117,13 @@ void DrivingFpsCounter(X86Context& ctx, uint8_t*) {
     float scale = line > 0 ? kSize / line : 1.0f;
     float top = kMargin + kSize - ascent * scale;  // the glyphs hang from y, the baseline ascent below
     Frame frame = FrameOf();
-    float left = frame.wide ? kMargin * kNarrow : kMargin;
+    if (frame.wide) d3d::BoxToWide(false);
+    float share = game::NarrowShare();
+    float left = kMargin * share;
     float asked = frame.wide ? scale : scale / kSafeScale;
-    DrawAt(ctx, renderer, asked, Colour(ctx, kBlack), Request(frame, left + kShadow, top + kShadow));
-    DrawAt(ctx, renderer, asked, Colour(ctx, kWhite), Request(frame, left, top));
+    float across = frame.wide ? asked * share / kNarrow : asked;  // 0xD6520 narrows the glyphs to a 16:9 frame's 4:3
+    DrawAt(ctx, renderer, across, asked, Colour(ctx, kBlack), Request(frame, left + kShadow, top + kShadow));
+    DrawAt(ctx, renderer, across, asked, Colour(ctx, kWhite), Request(frame, left, top));
     CallRenderer(ctx, kFlush, renderer, {});
+    if (frame.wide) d3d::BoxToWide(true);
 }

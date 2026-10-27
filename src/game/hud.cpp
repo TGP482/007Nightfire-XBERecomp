@@ -5,18 +5,18 @@
 #include <mutex>
 #include <unordered_map>
 
-#include "app/app.h"
+#include "common/aspect.h"
 #include "common/options.h"
 #include "game/animated_textures.h"
 #include "xdk/hle.h"
 
-// The 2D is laid out on the 640x480 frame, which a widescreen output shows 16:9. While a player's view, the HUD's or
-// the menus' draws its 2D layer, each sprite keeps its 4:3 shape at its panel's side of the view:
-// x' = left + (x - left) * 3/4 + anchor * width / 4. A side of a sprite on a side of the view stays there and its other
-// side goes where a centered sprite's would, so a full-screen overlay built from pieces still covers the view.
-// Markers the HUD places on the world through the view's projection (0xDB230), which already fits the wide view, are
-// moved out as far as their panel's placement brings them in, so only their width narrows. The grapple's icon is one,
-// placed by the ammo panel on the right.
+// The 2D is laid out on the 640x480 frame, which a wider output shows at its own shape. While a player's view, the
+// HUD's or the menus' draws its 2D layer, each sprite keeps its 4:3 shape at its panel's side of the view, with s the
+// 4:3 share of the output's width: x' = left + (x - left) * s + anchor * width * (1 - s). A side of a sprite on a side
+// of the view stays there and its other side goes where a centered sprite's would, so a full-screen overlay built
+// from pieces still covers the view. Markers the HUD places on the world through the view's projection (0xDB230),
+// which already fits the wide view, are moved out as far as their panel's placement brings them in, so only their
+// width narrows. The grapple's icon is one, placed by the ammo panel on the right.
 
 namespace {
 
@@ -63,7 +63,6 @@ constexpr uint32_t kSpriteH = 0x10;
 constexpr uint32_t kSpriteU = 0x14;
 constexpr uint32_t kSpriteUw = 0x1C;
 
-constexpr float kNarrow = 0.75f;  // 4:3 of a 16:9 frame
 constexpr float kFrameMiddleX = 320;
 constexpr float kFrameMiddleY = 240;
 constexpr uint32_t kFmvFill = 0;
@@ -133,7 +132,8 @@ float AnchorAt(uint32_t records, int32_t count) {
 }
 
 float Placed(float x, float anchor, float left, float right) {
-    return left + (x - left) * kNarrow + anchor * (right - left) * (1 - kNarrow);
+    float share = game::NarrowShare();
+    return left + (x - left) * share + anchor * (right - left) * (1 - share);
 }
 
 // a side on a side of the view stays there, and the other goes where a centered sprite's would
@@ -163,8 +163,9 @@ void DrawSideBars(X86Context& ctx, float width) {
 void Narrow(X86Context& ctx) {
     float& x = kernel::G<float>(ctx.esp + kSpriteX);
     float& w = kernel::G<float>(ctx.esp + kSpriteW);
-    x = kFrameMiddleX + (x - kFrameMiddleX) * kNarrow;
-    w *= kNarrow;
+    float share = game::NarrowShare();
+    x = kFrameMiddleX + (x - kFrameMiddleX) * share;
+    w *= share;
 }
 
 void NarrowToMiddle(X86Context& ctx) {
@@ -172,16 +173,17 @@ void NarrowToMiddle(X86Context& ctx) {
     DrawSideBars(ctx, (kFrameWidth - kernel::G<float>(ctx.esp + kSpriteW)) / 2);
 }
 
-// The film is one 640x480 sprite, which the 16:9 frame would stretch: FILL widens its height with it, so the film
+// The film is one 640x480 sprite, which a wider frame would stretch: FILL widens its height with it, so the film
 // keeps its shape and fills the screen (the letterbox bars go past the edges); 4:3 narrows it into the middle.
 void PlaceFilm(X86Context& ctx) {
-    if (!app::Widescreen()) return;
+    if (!game::Wide()) return;
     float& y = kernel::G<float>(ctx.esp + kSpriteY);
     float& h = kernel::G<float>(ctx.esp + kSpriteH);
     uint32_t scale = g_menu_film ? kFmv43 : game::Opt().fmv_scale;
     if (scale == kFmvFill) {
-        y = kFrameMiddleY + (y - kFrameMiddleY) / kNarrow;
-        h /= kNarrow;
+        float share = game::NarrowShare();
+        y = kFrameMiddleY + (y - kFrameMiddleY) / share;
+        h /= share;
         return;
     }
     NarrowToMiddle(ctx);
@@ -211,7 +213,8 @@ void Unnarrow(uint32_t out, uint32_t index, float anchor) {
     if (!view) return;
     float width = kernel::G<float>(view + kViewWidth);
     float& x = kernel::G<float>(out);
-    x = (x - anchor * width * (1 - kNarrow)) / kNarrow;
+    float share = game::NarrowShare();
+    x = (x - anchor * width * (1 - share)) / share;
 }
 
 void PlaceMarkers(X86Context& ctx, uint8_t* base, void (*panel)(X86Context&, uint8_t*), float anchor) {
@@ -227,7 +230,7 @@ X86_FUNC(sub_000DB230) {
     uint32_t out = kernel::R32(ctx.esp + kProjectOut);
     uint32_t index = kernel::G<uint16_t>(ctx.esp + kProjectView);
     __imp__sub_000DB230(ctx, base);
-    if (g_marker_anchor != kAuto && app::Widescreen() && out) Unnarrow(out, index, g_marker_anchor);
+    if (g_marker_anchor != kAuto && game::Wide() && out) Unnarrow(out, index, g_marker_anchor);
 }
 
 // the HUD's panels that place world markers, cdecl (player, slot, descriptor)
@@ -305,7 +308,7 @@ X86_FUNC(sub_000D9410) {
     bool narrowed = index < kPlayers || index == kHudView || index == kMenuView || index == kLoadingView;
     uint32_t first = args[kArgFirst];
     uint32_t end = args[kArgEnd];
-    if (!narrowed || !app::Widescreen() || first >= end) return __imp__sub_000D9410(ctx, base);
+    if (!narrowed || !game::Wide() || first >= end) return __imp__sub_000D9410(ctx, base);
     // runs of items with one anchor: each call flushes its sprites before it returns
     uint32_t ret = kernel::R32(ctx.esp);
     g_view = args[kArgView];
@@ -340,11 +343,11 @@ X86_FUNC(sub_000E6790) {
     if (g_side_bars) return __imp__sub_000E6790(ctx, base);
     if (g_film) PlaceFilm(ctx);
     // the menus and the loading screen stay 4:3, so their full screen picture does too
-    if (!g_film && app::Widescreen() && Background(ctx)) {
+    if (!g_film && game::Wide() && Background(ctx)) {
         NarrowToMiddle(ctx);
         return __imp__sub_000E6790(ctx, base);
     }
-    if (!g_film && !g_view && app::Widescreen() && kernel::G<uint8_t>(kLoading)) {
+    if (!g_film && !g_view && game::Wide() && kernel::G<uint8_t>(kLoading)) {
         Narrow(ctx);
         return __imp__sub_000E6790(ctx, base);
     }

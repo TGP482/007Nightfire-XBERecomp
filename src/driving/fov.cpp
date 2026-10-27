@@ -2,12 +2,14 @@
 #include <cmath>
 #include <iterator>
 
+#include "common/aspect.h"
 #include "common/options.h"
 #include "xdk/hle.h"
 
 // Field of view: the view's draw (0x96EB0) takes the camera's angle (+0xB4, 33 unzoomed) twice as its horizontal
-// degrees on a 4:3 frame, a quarter wider on a widescreen output, and hands it to the projection (0xE46D0). The car,
-// turret and sniper cameras all draw through it; the setting widens it as default.xbe's own 75 degrees widen to it.
+// degrees on a 4:3 frame, a quarter wider on a 16:9 output and wider again as the output is, and hands it to the
+// projection (0xE46D0). The car, turret and sniper cameras all draw through it; the setting widens it as
+// default.xbe's own 75 degrees widen to it.
 // Lock on targets (0xCE2B0) are placed with the same angle, the setting's included, and the scene is culled (0x8A420)
 // to it, so nothing at the sides of a wide view goes missing. The in-game cutscenes' cameras keep the game's angle.
 // A zoom (the turret's and the sniper's aim) eases the angle down (0x97710) and the widening fades out with it, so
@@ -68,6 +70,12 @@ float Widening(float camera_angle) {
     return std::clamp((camera_angle - g_zoom) / (kUnzoomed - g_zoom), 0.0f, 1.0f);
 }
 
+// a 16:9 output's degrees on the output's own shape
+float OutputDegrees(float degrees) {
+    if (!game::Wide()) return degrees;
+    return 2 * std::atan(HalfTan(degrees) * game::OutputAspect() / game::kWideAspect) * kDegrees;
+}
+
 float SettingDegrees(float degrees, float camera_angle) {
     uint32_t fov = game::Opt().fov;
     if (fov == game::kGameFov || g_cutscene) return degrees;
@@ -82,11 +90,11 @@ float SettingDegrees(float degrees, float camera_angle) {
 void DrivingFov(X86Context& ctx, uint8_t*) {
     float& angle = G<float>(ctx.esp + kViewAngle);
     float camera_angle = G<float>(R32(ctx.esi + kViewCamera) + kCameraAngle);
-    angle = SettingDegrees(angle, camera_angle);
+    angle = SettingDegrees(OutputDegrees(angle), camera_angle);
 }
 
 // at 0xCE371: a target took the 4:3 view's angle, close to the wide view's once the HUD squeezes it; it takes the
-// view's own angle now, squeezed as the HUD is
+// view's own angle now, squeezed as the HUD is in its 16:9 box
 void DrivingTargetProjection(X86Context& ctx, uint8_t*) {
     uint32_t display = R32(kDisplay);
     float camera_angle = G<float>(ctx.esp + kTargetCameraAngle);
@@ -94,9 +102,10 @@ void DrivingTargetProjection(X86Context& ctx, uint8_t*) {
     float squeeze = 1.0f;
     if (G<uint8_t>(display + kWide)) {
         degrees *= G<float>(kWideFov);
-        squeeze = G<float>(kHudSqueeze);
+        squeeze = G<float>(kHudSqueeze) / game::WideBoxWidth();
     }
-    G<float>(ctx.esp + kTargetHalfTan) = HalfTan(SettingDegrees(degrees, camera_angle)) * squeeze;
+    float shown = SettingDegrees(OutputDegrees(degrees), camera_angle);
+    G<float>(ctx.esp + kTargetHalfTan) = HalfTan(shown) * squeeze;
 }
 
 // at 0x8782E, before the player camera runs its type's update
@@ -110,7 +119,7 @@ void DrivingCameraType(X86Context& ctx, uint8_t*) {
 // at 0x8A490, before the cull (0x8D440) takes the camera's angle
 void DrivingCullFov(X86Context& ctx, uint8_t*) {
     float& half = G<float>(ctx.esp + kCullHalfAngle);
-    half = SettingDegrees(2 * half, half) / 2;
+    half = SettingDegrees(OutputDegrees(2 * half), half) / 2;
 }
 
 // a camera's angle eased towards a target (target, step), thiscall: the player's zoom in and out

@@ -9,11 +9,13 @@
 #include <unordered_set>
 
 #include "app/app.h"
+#include "common/aspect.h"
 #include "common/options.h"
 #include "core/diag.h"
 #include "d3d/occlusion.h"
 #include "d3d/simple_dirty.h"
 #include "d3d/visibility.h"
+#include "d3d/wide_box.h"
 #include "gpu/backend.h"
 #include "gpu/shaders.h"
 #include "gpu/texture.h"
@@ -342,6 +344,11 @@ void MarkCharacters(bool on) {
     if (g_backend) g_backend->Clear(g_state, 0, nullptr, gpu::kClearCharacters, 0, 0, on ? 1 : 0);
 }
 
+void BoxToWide(bool on) {
+    std::lock_guard<std::recursive_mutex> lock(g_lock);
+    if (g_backend) g_backend->Clear(g_state, 0, nullptr, gpu::kClearWideBox, 0, 0, on ? 1 : 0);
+}
+
 }  // namespace d3d
 
 using namespace d3d;
@@ -367,7 +374,7 @@ HLE_STDCALL(Direct3D_CreateDevice, 6) {
     gpu::MarkAllSimple();
     SetFrameBuffers("CreateDevice", a[4]);
     // 60 Hz, widescreen
-    if (XDK_CDevice_DisplayFlags != xdk::kUnknown) SetDev(XDK_CDevice_DisplayFlags, 0x400000 | (app::Widescreen() ? 0x10000 : 0));
+    if (XDK_CDevice_DisplayFlags != xdk::kUnknown) SetDev(XDK_CDevice_DisplayFlags, 0x400000 | (game::Wide() ? 0x10000 : 0));
     // the miniport's hardware init leaves an identity ramp in slot 0, which GetGammaRamp reads until one is set
     if (XDK_CDevice_GammaRamps != xdk::kUnknown) {
         uint8_t* ramp = static_cast<uint8_t*>(HostPtr(kDevice + XDK_CDevice_GammaRamps));  // red, green, blue

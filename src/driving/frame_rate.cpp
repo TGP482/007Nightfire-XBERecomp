@@ -107,6 +107,7 @@ X86_FUNC(sub_0005BA80) {
     AddSchedulerTicks(updates);
     __imp__sub_0005BA80(ctx, base);
     game::SaveChangedOptions(ctx);
+    game::FollowOutputAspect();
 }
 
 // the game clock's update, thiscall: counts the console ticks real time crossed

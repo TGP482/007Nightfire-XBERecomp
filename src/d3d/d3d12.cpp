@@ -31,6 +31,7 @@
 #include <backends/imgui_impl_win32.h>
 
 #include "app/app.h"
+#include "common/aspect.h"
 #include "common/options.h"
 #include "core/diag.h"
 #include "core/log.h"
@@ -43,6 +44,7 @@
 #include "d3d/occlusion.h"
 #include "d3d/smaa_shader.h"
 #include "d3d/smaa_textures.h"
+#include "d3d/wide_box.h"
 #include "kernel/kernel.h"
 
 using Microsoft::WRL::ComPtr;
@@ -1137,6 +1139,7 @@ private:
     uint32_t ao_w_ = 0;
     uint32_t ao_h_ = 0;
     bool characters_ = false;  // draws between the game's character marks
+    bool wide_box_ = false;    // draws between the game's 16:9 box marks
     // HDR10 output: the window's display, the output asked and in use, the frame and panel targets it draws first
     HMONITOR hdr_mon_ = nullptr;
     bool hdr_display_ = false;
@@ -3142,6 +3145,20 @@ void D3D12Backend::SetTextureViewsAndSamplers(const State& s, const Assembled& a
     binds_.samplers = samplers;
 }
 
+// the viewport and the scissor's corners into the largest 16:9 box in the middle of the target
+void FitWideBox(D3D12_VIEWPORT& vp, LONG& x0, LONG& y0, LONG& x1, LONG& y1) {
+    float kx = game::WideBoxWidth();
+    float ky = game::WideBoxHeight();
+    vp.TopLeftX = vp.Width * (1 - kx) / 2;
+    vp.TopLeftY = vp.Height * (1 - ky) / 2;
+    vp.Width *= kx;
+    vp.Height *= ky;
+    x0 = LONG(vp.TopLeftX + float(x0) * kx);
+    y0 = LONG(vp.TopLeftY + float(y0) * ky);
+    x1 = LONG(vp.TopLeftX + float(x1) * kx);
+    y1 = LONG(vp.TopLeftY + float(y1) * ky);
+}
+
 // viewport covers the target, the guest viewport is in the shader; scissor clips to it
 void D3D12Backend::SetViewportScissor(const State& s, uint32_t gw) {
     float W = float(bound_rt_ ? bound_rt_->w : bound_ds_->w);
@@ -3158,6 +3175,9 @@ void D3D12Backend::SetViewportScissor(const State& s, uint32_t gw) {
         x1 = std::min(x1, LONG(s.scissors[2] * sc));
         y1 = std::min(y1, LONG(s.scissors[3] * sc));
     }
+    const Target* bound = bound_rt_ ? bound_rt_ : bound_ds_;
+    bool screen = bound->gw == guest_w_ && bound->gh == guest_h_;
+    if (wide_box_ && screen) FitWideBox(vp, x0, y0, x1, y1);
     D3D12_RECT rect{std::clamp<LONG>(x0, 0, LONG(W)), std::clamp<LONG>(y0, 0, LONG(H)),
                     std::clamp<LONG>(x1, 0, LONG(W)), std::clamp<LONG>(y1, 0, LONG(H))};
     bool same = binds_.rasterizer && !std::memcmp(&vp, &binds_.viewport, sizeof(vp)) &&
@@ -3438,6 +3458,10 @@ void D3D12Backend::Clear(const State& s, uint32_t count, const uint8_t* rects, u
     }
     if (flags == kClearCharacters) {
         characters_ = stencil != 0;
+        return;
+    }
+    if (flags == kClearWideBox) {
+        wide_box_ = stencil != 0;
         return;
     }
     PerfScope perf_clear{g_perf.clear};
@@ -4081,9 +4105,8 @@ std::array<float, 9> ColourBlindMatrix(uint32_t mode) {
 }
 
 void D3D12Backend::BlitFrame(ID3D12Resource* shown, DXGI_FORMAT fmt) {
-    // 16:9 when the console reports a widescreen display, else 4:3
-    bool wide = app::Widescreen();
-    float aspect = wide ? 16.0f / 9.0f : 4.0f / 3.0f;
+    // the output's own shape, 4:3 in the middle of a narrower one
+    float aspect = game::OutputAspect();
     float w = float(bb_w_);
     float h = float(bb_h_);
     float vw = std::min(w, h * aspect);

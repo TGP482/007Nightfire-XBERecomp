@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "app/app.h"
+#include "common/aspect.h"
 #include "common/menu.h"
 #include "core/log.h"
 
@@ -158,7 +159,7 @@ void* CursorImage() {
     HWND hwnd = static_cast<HWND>(Window());
     if (!g_image || !hwnd || !GetClientRect(hwnd, &r)) return arrow;
     // the frame is shown in the middle of the window, as input::Cursor maps it
-    float aspect = Widescreen() ? 16.0f / 9.0f : 4.0f / 3.0f;
+    float aspect = game::OutputAspect();
     int frame_height = int(std::min(float(r.bottom), r.right / aspect));
     if (frame_height <= 0) return arrow;
     if (frame_height != g_height || !g_cursor) {

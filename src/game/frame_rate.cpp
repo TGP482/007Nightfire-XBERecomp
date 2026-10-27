@@ -37,6 +37,7 @@ X86_FUNC(sub_0006B040) {
     kernel::W32(ctx.esp + kRate, whole);
     __imp__sub_0006B040(ctx, base);
     game::SaveChangedOptions(ctx);
+    game::FollowOutputAspect();
 }
 
 // A character's animation change (0x33F20) blends the new layer in over the old one. A character holds at most 32

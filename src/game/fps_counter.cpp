@@ -2,6 +2,7 @@
 #include <cstdio>
 
 #include "app/app.h"
+#include "common/aspect.h"
 #include "common/options.h"
 #include "core/log.h"
 #include "game/main_menu.h"
@@ -40,7 +41,6 @@ constexpr float kLineHeight = 13;
 constexpr float kFrameWidth = 640;
 constexpr float kMargin = 8;  // as the other recomps, on the frame 480 high
 constexpr float kFpsSize = 12;  // SCDA's counter: 12 high, its baseline 8 + 12 down
-constexpr float kNarrow = 0.75f;  // a 4:3 glyph on the frame shown 16:9
 constexpr uint32_t kWhite = 0xFFFFFFFF;
 constexpr uint32_t kBlack = 0x000000FF;
 constexpr uint32_t kGrey = 0x5D5D5DFF;  // the other recomps' watermark grey, 186 of 255
@@ -57,7 +57,7 @@ constexpr uint32_t kScratchSize = 64;
 
 uint32_t Bits(float value) { return std::bit_cast<uint32_t>(value); }
 
-float Wide() { return app::Widescreen() ? kNarrow : 1.0f; }
+float Wide() { return game::NarrowShare(); }  // a 4:3 glyph on the frame
 
 struct Line {
     float x;

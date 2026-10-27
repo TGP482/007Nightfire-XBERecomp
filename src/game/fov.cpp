@@ -233,12 +233,16 @@ void SquashBone(const Squash& squash, uint32_t position, uint32_t matrix) {
 
 }  // namespace
 
+namespace game {
+void ShapeView(X86Context& ctx, uint8_t* base, void (*shape)(X86Context&, uint8_t*));  // widescreen.cpp
+}
+
 // a view's angle (view index, radians), cdecl
 X86_EXTERN_FUNC(__imp__sub_00025190);
 X86_FUNC(sub_00025190) {
     uint16_t index = kernel::R16(ctx.esp + 4);
     float angle = G<float>(ctx.esp + 8);
-    __imp__sub_00025190(ctx, base);
+    game::ShapeView(ctx, base, __imp__sub_00025190);
     if (index >= kPlayers) return;
     uint32_t view = R32(kViews + index * 4u);
     if (view && G<float>(view + kViewAngle) == angle) g_views[index].game_angle = angle;

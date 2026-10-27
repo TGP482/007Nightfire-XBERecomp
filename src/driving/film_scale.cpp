@@ -1,13 +1,15 @@
 #include <bit>
 #include <initializer_list>
 
+#include "common/aspect.h"
 #include "common/options.h"
 #include "xdk/hle.h"
 
 // A mission's film plays in its own loop (0x1308A0): the player (edi) gets its place (vt +0x4) and scale (vt +0x8)
 // once, the frame's size over the film's, and on a widescreen output the console's own fill: 4/3 taller and lifted a
-// sixth of the frame. They are set again each frame by the FMV scale setting: FILL as the console, 4:3 the film's
-// width 3/4 narrower in the middle of the frame. The loop reuses the x scale's slot, so the scale is kept beforehand.
+// sixth of the frame. They are set again each frame by the FMV scale setting: FILL as the console, as much taller as
+// the output is wider than 4:3, 4:3 the film's width narrowed to a 4:3 share in the middle of the frame. The loop
+// reuses the x scale's slot, so the scale is kept beforehand.
 namespace {
 
 using kernel::G;
@@ -22,12 +24,8 @@ constexpr uint32_t kWide = 0xD4;  // byte: the output is widescreen, as 0x5A6B0 
 // the player, thiscall
 constexpr uint32_t kPlace = 0x4;  // (x, y, z)
 constexpr uint32_t kScale = 0x8;  // (x, y)
-constexpr uint32_t kFillScale = 0x1A3190;  // 4/3
-constexpr uint32_t kFillLift = 0x1A3194;   // -1/6
 
-constexpr uint32_t kFmv43 = 1;     // game::Options::fmv_scale
-constexpr float kNarrow = 0.75f;  // 4:3 of a 16:9 frame
-constexpr float kCentre = (1 - kNarrow) / 2;
+constexpr uint32_t kFmv43 = 1;  // game::Options::fmv_scale
 
 struct FilmScale {
     float x = 1.0f;
@@ -57,13 +55,15 @@ void DrivingFilmScaleLatch(X86Context& ctx, uint8_t*) {
 void DrivingFilmScale(X86Context& ctx, uint8_t*) {
     if (!G<uint8_t>(ctx.esp + kWide)) return;
     uint32_t player = ctx.edi;
+    float share = game::NarrowShare();
     if (game::Opt().fmv_scale == kFmv43) {
-        float x = G<float>(ctx.esp + kWidth) * kCentre;
+        float x = G<float>(ctx.esp + kWidth) * (1 - share) / 2;
         CallPlayer(ctx, player, kPlace, {Bits(x), 0, 0});
-        CallPlayer(ctx, player, kScale, {Bits(g_scale.x * kNarrow), Bits(g_scale.y)});
+        CallPlayer(ctx, player, kScale, {Bits(g_scale.x * share), Bits(g_scale.y)});
         return;
     }
-    float y = G<float>(ctx.esp + kHeight) * G<float>(kFillLift);
+    float fill = 1 / share;
+    float y = G<float>(ctx.esp + kHeight) * (1 - fill) / 2;
     CallPlayer(ctx, player, kPlace, {0, Bits(y), 0});
-    CallPlayer(ctx, player, kScale, {Bits(g_scale.x), Bits(g_scale.y * G<float>(kFillScale))});
+    CallPlayer(ctx, player, kScale, {Bits(g_scale.x), Bits(g_scale.y * fill)});
 }

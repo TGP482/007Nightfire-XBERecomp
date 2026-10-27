@@ -23,5 +23,7 @@ const GameOption* GameOptions(size_t* count);
 inline std::atomic<bool> g_options_changed{false};  // a row changed one of them
 // game thread, each frame: once one changed, default.xbe saves the profile with the panel shut, Driving.xbe passes it on
 void SaveChangedOptions(X86Context& ctx);
+// game thread, each frame: the game's widescreen follows the output's shape
+void FollowOutputAspect();
 
 }  // namespace game

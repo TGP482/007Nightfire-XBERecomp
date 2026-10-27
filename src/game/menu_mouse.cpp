@@ -4,6 +4,7 @@
 #include <iterator>
 
 #include "app/app.h"
+#include "common/aspect.h"
 #include "common/menu.h"
 #include "common/mouse_keyboard.h"
 #include "core/log.h"
@@ -84,7 +85,6 @@ constexpr uint32_t kMenuView = 0x1F661C + 7 * 4;
 constexpr uint32_t kViewLeft = 0xDC;
 constexpr uint32_t kViewRight = 0xE0;
 constexpr uint32_t kViewTop = 0xE4;
-constexpr float kNarrow = 0.75f;
 constexpr float kFrameWidth = 640.0f;
 constexpr float kFrameHeight = 480.0f;
 constexpr int kMaxWidgets = 256;
@@ -274,7 +274,8 @@ bool MousePoint(int& x, int& y) {
     float right = view ? G<float>(view + kViewRight) : kFrameWidth;
     float shown = fx * kFrameWidth;
     // where a sprite drawn here was laid out: the inverse of hud.cpp's centered placement
-    if (app::Widescreen()) shown = left + (shown - left - (right - left) * (1 - kNarrow) / 2) / kNarrow;
+    float share = game::NarrowShare();
+    if (game::Wide()) shown = left + (shown - left - (right - left) * (1 - share) / 2) / share;
     x = int(std::floor(shown - left));
     y = int(std::floor(fy * kFrameHeight - ViewTop()));
     return true;
