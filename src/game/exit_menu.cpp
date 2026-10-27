@@ -18,6 +18,7 @@
 
 #include "app/app.h"
 #include "core/log.h"
+#include "game/main_menu.h"
 #include "game/options_menu.h"
 #include "kernel/memory.h"
 #include "xdk/hle.h"
@@ -163,6 +164,8 @@ void Quit() {
 }
 
 }  // namespace
+
+bool game::QuitAsked() { return g_asking; }
 
 // a menu record's message handler, cdecl (record, message, a, b)
 X86_EXTERN_FUNC(__imp__sub_00092C40);

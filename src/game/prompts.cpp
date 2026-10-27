@@ -7,6 +7,7 @@
 
 #include "common/mouse_keyboard.h"
 #include "core/log.h"
+#include "game/main_menu.h"
 #include "kernel/memory.h"
 #include "xdk/hle.h"
 
@@ -30,6 +31,10 @@ constexpr uint32_t kStringText = 0x6D460;  // (string id, 0, 0): its text
 constexpr uint32_t kTitleLine = 0x2FB;     // the title screen's line, set by its page handler 0x854C0
 constexpr char kStartWord[] = "START";
 constexpr char kStartButton[] = "~A";  // the page's full screen text 0x10000196 takes A: ENTER
+
+// the popup QUIT asks with takes B as no, which its legend leaves out
+constexpr char kQuitLegend[] = "Press ~A";
+constexpr char kQuitCancel[] = " or ~B to cancel";
 
 std::string Upper(std::string name) {
     for (char& c : name) c = char(std::toupper(uint8_t(c)));
@@ -124,6 +129,22 @@ bool TitleLine(X86Context& ctx, std::string_view text, std::string& line, int& c
     return true;
 }
 
+// QUIT's legend with B to cancel, or empty
+std::string QuitLegend(std::string_view text, int& count) {
+    bool legend = text.starts_with(kQuitLegend) && text.find("~B") == text.npos;
+    if (!game::QuitAsked() || !legend) return {};
+    if (count >= int(text.size())) count = int(text.size() + sizeof(kQuitCancel) - 1);
+    return std::string(text) + kQuitCancel;
+}
+
+void SetText(X86Context& ctx, uint32_t scratch, const Rewritten& keys) {
+    size_t length = std::min<size_t>(keys.text.size(), kScratchSize - 1);
+    std::memcpy(kernel::HostPtr(scratch), keys.text.data(), length);
+    G<char>(scratch + uint32_t(length)) = 0;
+    kernel::W32(ctx.esp + kTextArg, scratch);
+    if (keys.count >= 0) kernel::W32(ctx.esp + kCountArg, uint32_t(keys.count));
+}
+
 }  // namespace
 
 X86_EXTERN_FUNC(__imp__sub_00069C50);
@@ -133,15 +154,12 @@ X86_FUNC(sub_00069C50) {
     std::string title;
     bool title_keys = input::KeyboardActive() && TitleLine(ctx, text, title, count);
     if (title_keys) text = title;
+    std::string quit = QuitLegend(text, count);
+    if (!quit.empty()) text = quit;
     bool legend = title_keys || (input::CursorShown() && Legend(text));
     bool keys_shown = legend && text.find(kGlyph) != text.npos;
-    if (!keys_shown) return __imp__sub_00069C50(ctx, base);
+    if (!keys_shown && quit.empty()) return __imp__sub_00069C50(ctx, base);
     static const uint32_t scratch = mem::AllocSystem(kScratchSize);
-    Rewritten keys = Rewrite(text, count);
-    size_t length = std::min<size_t>(keys.text.size(), kScratchSize - 1);
-    std::memcpy(kernel::HostPtr(scratch), keys.text.data(), length);
-    G<char>(scratch + uint32_t(length)) = 0;
-    kernel::W32(ctx.esp + kTextArg, scratch);
-    if (keys.count >= 0) kernel::W32(ctx.esp + kCountArg, uint32_t(keys.count));
+    SetText(ctx, scratch, keys_shown ? Rewrite(text, count) : Rewritten{quit, count});
     __imp__sub_00069C50(ctx, base);
 }

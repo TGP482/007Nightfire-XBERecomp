@@ -14,4 +14,6 @@ struct LegendRow {
 LegendRow TakeMainMenuLegend();
 void ClearMainMenuLegend();  // before each run of the menus
 
+bool QuitAsked();  // exit_menu.cpp: QUIT's question is up
+
 }  // namespace game
