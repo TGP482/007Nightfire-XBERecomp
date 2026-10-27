@@ -3,7 +3,7 @@ setlocal
 set "GAME_TITLE=007: Nightfire - XBE Recomp"
 set "GAME_XBE=default.xbe"
 set "DRIVING_XBE=Driving.xbe"
-set "GAME_EXE=007Nightfire"
+set "GAME_EXE=nightfire"
 set "LAUNCHER=nightfire"
 title %GAME_TITLE% - Build
 cd /d "%~dp0"

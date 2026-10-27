@@ -1,7 +1,7 @@
 @echo off
 set "LAUNCHER=nightfire"
-set "GAME_RUNTIME=007NightfireRuntime"
-set "DRIVING_RUNTIME=007NightfireDrivingRuntime"
+set "GAME_RUNTIME=nightfireRuntime"
+set "DRIVING_RUNTIME=drivingRuntime"
 cd /d "%~dp0"
 set "OUT=out\build\release"
 set "D3DCOMPILER=%ProgramFiles(x86)%\Windows Kits\10\Redist\D3D\x64\d3dcompiler_47.dll"

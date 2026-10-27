@@ -10,7 +10,7 @@
 
 namespace {
 
-constexpr wchar_t kFirstImage[] = L"007Nightfire";  // GameInfo::images' first exe name
+constexpr wchar_t kFirstImage[] = L"nightfire";  // GameInfo::images' first exe name
 constexpr wchar_t kImageArgument[] = L"--image ";
 constexpr wchar_t kRuntimeSuffix[] = L"Runtime.dll";
 constexpr char kRunImage[] = "RunImage";  // src/common/run_image.cpp

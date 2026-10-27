@@ -46,15 +46,16 @@ file(STRINGS config/driving.toml DRIVING_PARTITIONS REGEX "^partitions *=")
 string(REGEX MATCH "[0-9]+" DRIVING_PARTITIONS "${DRIVING_PARTITIONS}")
 
 # target name = GAME_EXE in build.bat, xbe = GAME_XBE
-add_image_module(007Nightfire default.xbe game.toml ${GAME_PARTITIONS} game)
+add_image_module(nightfire default.xbe game.toml ${GAME_PARTITIONS} game)
 # the driving missions, a second engine the game launches as its own image
-add_image_module(007NightfireDriving Driving.xbe driving.toml ${DRIVING_PARTITIONS} driving)
+add_image_module(driving Driving.xbe driving.toml ${DRIVING_PARTITIONS} driving)
 
 # nightfire.exe starts either image's runtime
-add_executable(nightfire WIN32 src/launcher/main.cpp)
-target_compile_definitions(nightfire PRIVATE UNICODE _UNICODE)
-target_link_options(nightfire PRIVATE -fuse-ld=lld)
-add_dependencies(nightfire 007Nightfire 007NightfireDriving)
+add_executable(launcher WIN32 src/launcher/main.cpp)
+set_target_properties(launcher PROPERTIES OUTPUT_NAME nightfire)
+target_compile_definitions(launcher PRIVATE UNICODE _UNICODE)
+target_link_options(launcher PRIVATE -fuse-ld=lld)
+add_dependencies(launcher nightfire driving)
 
 # build_info.h for the version resource, rewritten only when the commit changes
 find_package(Git QUIET)
@@ -66,5 +67,5 @@ add_custom_target(build_info
     VERBATIM)
 set_source_files_properties(src/common/version.rc PROPERTIES
     INCLUDE_DIRECTORIES ${CMAKE_CURRENT_BINARY_DIR} OBJECT_DEPENDS ${BUILD_INFO})
-target_sources(nightfire PRIVATE src/common/version.rc)
-add_dependencies(nightfire build_info)
+target_sources(launcher PRIVATE src/common/version.rc)
+add_dependencies(launcher build_info)

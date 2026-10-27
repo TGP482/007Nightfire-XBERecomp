@@ -8,7 +8,7 @@ xdk = 4831
 out = "generated/driving"
 partitions = 32
 code_sections = [".text", "D3DX", "D3D", "XGRPH", "DSOUND", "XPP"]
-library = "007NightfireDriving.dll"  # <exe>.dll, which the executable delay loads
+library = "driving.dll"  # <exe>.dll, which the executable delay loads
 
 # extra entry points
 [functions]

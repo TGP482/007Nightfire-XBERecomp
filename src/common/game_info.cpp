@@ -304,8 +304,8 @@ const app::GameInfo app::kGame = {
     .settings = "settings.toml",            // settings file beside the exe
     .splash = L"splash",                    // optional splash.png or splash.bmp beside the exe
     .missing = L"Put the game in the assets folder: its disc image (.iso), or default.xbe with its folders beside it.",
-    .images = {{"default.xbe", "007Nightfire"},  // each recompiled xbe and its runtime, which nightfire.exe loads
-               {"Driving.xbe", "007NightfireDriving"}},
+    .images = {{"default.xbe", "nightfire"},  // each recompiled xbe and its runtime, which nightfire.exe loads
+               {"Driving.xbe", "driving"}},
     .options = {{"skip_intros", &game::Opt().skip_intros, nullptr},
                 {"fps_counter", &game::Opt().fps_counter, nullptr},
                 {"pause_on_focus_loss", &game::Opt().pause_on_focus_loss, nullptr},
