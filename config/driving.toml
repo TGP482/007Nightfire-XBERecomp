@@ -319,6 +319,11 @@ at = 0x130A5B
 call = "DrivingFilmRedraw"
 on_true = 0x130A18
 
+[[hook]]
+at = 0x130A30
+call = "DrivingFilmPicture"
+on_true = 0x130A38
+
 # ambient occlusion once a view's opaque passes are drawn (src/driving/ambient_occlusion.cpp)
 [[hook]]
 at = 0x8D04A
