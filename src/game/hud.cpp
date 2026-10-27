@@ -14,6 +14,8 @@
 // the menus' draws its 2D layer, each sprite keeps its 4:3 shape at its panel's side of the view:
 // x' = left + (x - left) * 3/4 + anchor * width / 4. A side of a sprite on a side of the view stays there and its other
 // side goes where a centered sprite's would, so a full-screen overlay built from pieces still covers the view.
+// Markers the HUD places on the world through the view's projection (0xDB230), which already fits the wide view, are
+// moved out from the middle as far as that brings them in, so only their width narrows.
 
 namespace {
 
@@ -96,6 +98,7 @@ constexpr Panel kPanels[] = {{0x17FDE8, kLeft},   // health ring
                              {0x1806D8, kAuto}};  // multiplayer radar
 
 uint32_t g_view = 0;  // while its 2D layer draws
+bool g_marking = false;  // a panel places its markers on the world (0xB4760 its targets, 0xB4330 the flare)
 bool g_film = false;  // the film player's frame draws
 bool g_side_bars = false;  // DrawSideBars draws
 bool g_menu_film = false;  // the film playing is a menu page's background
@@ -194,7 +197,44 @@ bool Background(X86Context& ctx) {
     return covers && kernel::G<float>(ctx.esp + kSpriteUw) != 0.0f;
 }
 
+// the view's projection, cdecl (point, out x y depth, view index)
+constexpr uint32_t kProjectOut = 8;
+constexpr uint32_t kProjectView = 0xC;
+constexpr uint32_t kViewWidth = 0xF8;
+
+// out x from the view's left, where the centered placement narrows it back to
+void Unnarrow(uint32_t out, uint32_t index) {
+    uint32_t view = index < kViewCount ? kernel::R32(kViews + index * 4) : 0;
+    if (!view) return;
+    float middle = kernel::G<float>(view + kViewWidth) / 2;
+    float& x = kernel::G<float>(out);
+    x = middle + (x - middle) / kNarrow;
+}
+
 }  // namespace
+
+X86_EXTERN_FUNC(__imp__sub_000DB230);
+X86_FUNC(sub_000DB230) {
+    uint32_t out = kernel::R32(ctx.esp + kProjectOut);
+    uint32_t index = kernel::G<uint16_t>(ctx.esp + kProjectView);
+    __imp__sub_000DB230(ctx, base);
+    if (g_marking && app::Widescreen() && out) Unnarrow(out, index);
+}
+
+// the HUD's world markers, cdecl (player, slot, descriptor)
+X86_EXTERN_FUNC(__imp__sub_000B4760);
+X86_FUNC(sub_000B4760) {
+    g_marking = true;
+    __imp__sub_000B4760(ctx, base);
+    g_marking = false;
+}
+
+X86_EXTERN_FUNC(__imp__sub_000B4330);
+X86_FUNC(sub_000B4330) {
+    g_marking = true;
+    __imp__sub_000B4330(ctx, base);
+    g_marking = false;
+}
 
 // a film starts, cdecl (film, loops, volume)
 X86_EXTERN_FUNC(__imp__sub_000DCCD0);
