@@ -50,6 +50,7 @@ constexpr float kPullTopMultiplayer = 0.5f;
 constexpr float kPullFrames = 15.0f;
 constexpr uint32_t kMultiplayer = 0x260018;
 constexpr uint32_t kBondPosition = 0x24;
+constexpr uint32_t kPullDirection = 0xC;  // the direction vector 0xAA4EB points eax at, from the stack pointer
 
 float Distance(uint32_t a, uint32_t b) {
     float x = G<float>(a) - G<float>(b);
@@ -67,6 +68,7 @@ bool GrapplePull(X86Context& ctx, uint8_t*) {
     float& step = G<float>(ctx.esi + kPullStep);
     float speed = std::min(step / frames + kPullGain * frames, top);  // per 60 fps frame
     step = std::min(speed * frames, Distance(ctx.edi + kBondPosition, ctx.esi));
+    ctx.eax = ctx.esp + kPullDirection;
     return true;
 }
 
