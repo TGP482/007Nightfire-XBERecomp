@@ -31,6 +31,9 @@ constexpr uint32_t kCameraAt = 0x50;     // 4 floats
 constexpr uint32_t kCameraView = 0x70;   // 4x4
 constexpr uint32_t kCameraAngle = 0xB4;
 constexpr uint32_t kCameraSize = 0xB8;
+// the player camera's aim, 3 floats along which the crosshair is projected (0x81890)
+constexpr uint32_t kPlayerCameraClass = 0x1918AC;
+constexpr uint32_t kCameraAim = 0x180;
 
 // a character (0x12840): its animation (+0x4), whose pose (+0x24) holds the bones (+0x100, 4x4) and their count,
 // and its body (+0xC), whose world matrix the skin is drawn with (0x14C50)
@@ -83,6 +86,7 @@ struct CameraPose {
     float at[4];
     float view[16];
     float angle;
+    float aim[3];
 };
 
 struct Camera {
@@ -195,12 +199,15 @@ void PutBack() {
     g_shown.clear();
 }
 
+bool HasAim(uint32_t camera) { return R32(camera) == kPlayerCameraClass; }
+
 CameraPose ReadCamera(uint32_t camera) {
-    CameraPose pose;
+    CameraPose pose{};
     std::memcpy(pose.world, &G<float>(camera + kCameraWorld), sizeof(pose.world));
     std::memcpy(pose.at, &G<float>(camera + kCameraAt), sizeof(pose.at));
     std::memcpy(pose.view, &G<float>(camera + kCameraView), sizeof(pose.view));
     pose.angle = G<float>(camera + kCameraAngle);
+    if (HasAim(camera)) std::memcpy(pose.aim, &G<float>(camera + kCameraAim), sizeof(pose.aim));
     return pose;
 }
 
@@ -209,6 +216,7 @@ void WriteCamera(uint32_t camera, const CameraPose& pose) {
     std::memcpy(&G<float>(camera + kCameraAt), pose.at, sizeof(pose.at));
     std::memcpy(&G<float>(camera + kCameraView), pose.view, sizeof(pose.view));
     G<float>(camera + kCameraAngle) = pose.angle;
+    if (HasAim(camera)) std::memcpy(&G<float>(camera + kCameraAim), pose.aim, sizeof(pose.aim));
 }
 
 Skin ReadSkin(uint32_t character) {
@@ -297,6 +305,7 @@ void ShowCameras() {
         Lerp(between.at, tracked.before.at, tracked.after.at, 4, share);
         Lerp(between.view, tracked.before.view, tracked.after.view, 16, share);
         between.angle = tracked.before.angle + (tracked.after.angle - tracked.before.angle) * share;
+        Lerp(between.aim, tracked.before.aim, tracked.after.aim, 3, share);
         WriteCamera(camera, between);
         tracked.shown = true;
     }
