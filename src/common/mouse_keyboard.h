@@ -23,7 +23,7 @@ uint8_t ReloadKey();
 uint8_t ActionKey();
 // raw mouse counts since the last call, scaled by the settings; false when there are none. Asked every frame in play,
 // which keeps the cursor in the window.
-bool TakeMouse(float& dx, float& dy);
+bool TakeMouse(float& dx, float& dy, bool aim = false);
 void SeenPad(const Pad& pad);  // a controller's report before the panel or keys change it
 bool KeyboardActive();         // keyboard or mouse used last, not a controller
 

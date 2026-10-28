@@ -514,15 +514,15 @@ void Keyboard(float* values, bool menu) {
 uint8_t ReloadKey() { return g_reload_bits; }
 uint8_t ActionKey() { return g_action_bits; }
 
-bool TakeMouse(float& dx, float& dy) {
+bool TakeMouse(float& dx, float& dy, bool aim) {
     uint64_t now = NowMs();
     bool stale = now - g_take_ms.exchange(now) >= kPlayMs;
     int x = g_dx.exchange(0);
     int y = g_dy.exchange(0);
     if ((!x && !y) || stale || g_menu || !Active()) return false;  // menu moves go to its cursor
     const game::Options& o = game::Opt();
-    dx = float(o.invert_mouse_x ? -x : x) * o.mouse_sensitivity;
-    dy = float(o.invert_mouse ? -y : y) * o.mouse_vertical_sensitivity;
+    dx = float(o.invert_mouse_x ? -x : x) * (aim ? o.aim_horizontal_sensitivity : o.mouse_sensitivity);
+    dy = float(o.invert_mouse ? -y : y) * (aim ? o.aim_vertical_sensitivity : o.mouse_vertical_sensitivity);
     return true;
 }
 

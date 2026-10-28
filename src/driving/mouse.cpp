@@ -63,10 +63,10 @@ struct LookTurn {
     float up_down = 0.0f;
 };
 
-LookTurn MouseTurn() {
+LookTurn MouseTurn(bool aim) {
     float dx;
     float dy;
-    if (!input::TakeMouse(dx, dy)) return {};
+    if (!input::TakeMouse(dx, dy, aim)) return {};
     return {dx * kTurnsPerCount, dy * kTurnsPerCount};
 }
 
@@ -94,12 +94,11 @@ float StepWithin(float& value, float step, float reach) {
 
 // while aiming the mouse moves the sight, and past the dead zone the view turns by the rest, as the sticks turn it
 LookTurn MoveSight(uint32_t character, LookTurn mouse, float zoom) {
-    const game::Options& o = game::Opt();
     uint32_t record = CameraRecord(character);
     float& yaw = G<float>(character + kCharacterSightYaw);
     float& pitch = G<float>(character + kCharacterSightPitch);
-    float across = mouse.across * o.aim_horizontal_sensitivity * zoom;
-    float up_down = mouse.up_down * o.aim_vertical_sensitivity * zoom;
+    float across = mouse.across * zoom;
+    float up_down = mouse.up_down * zoom;
     float rest_across = StepWithin(yaw, across, G<float>(record + kDeadZoneYaw) * zoom);
     float rest_up_down = StepWithin(pitch, up_down, G<float>(record + kDeadZonePitch) * zoom);
     return {rest_across / zoom, rest_up_down / zoom};
@@ -133,11 +132,12 @@ X86_FUNC(sub_000857D0) {
     uint32_t character = ctx.ecx;
     uint32_t input = R32(character + kCharacterInput);
     if (input) {
-        LookTurn mouse = MouseTurn();
+        bool aiming = G<uint8_t>(input + kAiming);
+        LookTurn mouse = MouseTurn(aiming);
         LookTurn gyro = GyroTurn();
         float zoom = G<float>(character + kCharacterFov) / kUnzoomedFov;
         bool moved = mouse.across != 0.0f || mouse.up_down != 0.0f;
-        if (moved && G<uint8_t>(input + kAiming)) mouse = MoveSight(character, mouse, zoom);
+        if (moved && aiming) mouse = MoveSight(character, mouse, zoom);
         G<float>(character + kCharacterYaw) += (mouse.across + gyro.across) * zoom;
         G<float>(character + kCharacterPitch) += (mouse.up_down + gyro.up_down) * zoom;
     }
@@ -152,7 +152,7 @@ X86_FUNC(sub_00060110) {
     if (!player || R32(player + kPlayerCamera) != camera) return __imp__sub_00060110(ctx, base);
     const game::Options& o = game::Opt();
     bool pad = !input::KeyboardActive();
-    LookTurn mouse = MouseTurn();
+    LookTurn mouse = MouseTurn(false);
     LookTurn gyro = GyroTurn();
     float kept = float(driving::Ease(kTurnKept));
     float across_sensitivity = pad ? o.pad_horizontal_sensitivity : 1.0f;

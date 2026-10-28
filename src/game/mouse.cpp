@@ -111,8 +111,8 @@ void MoveSight(uint32_t controller, float across, float up) {
 // the look adds the stick's pitch to the pitch the frame started with
 void ScalePadLook(uint32_t controller, bool aim, float pitch_before) {
     const game::Options& o = game::Opt();
-    float x = o.pad_horizontal_sensitivity * (aim ? o.pad_aim_horizontal_sensitivity : 1.0f);
-    float y = o.pad_vertical_sensitivity * (aim ? o.pad_aim_vertical_sensitivity : 1.0f);
+    float x = aim ? o.pad_aim_horizontal_sensitivity : o.pad_horizontal_sensitivity;
+    float y = aim ? o.pad_aim_vertical_sensitivity : o.pad_vertical_sensitivity;
     G<float>(controller + kControllerYawStep) *= x;
     float& pitch = G<float>(controller + kControllerPitch);
     pitch = pitch_before + (pitch - pitch_before) * y;
@@ -127,7 +127,7 @@ void MouseLook(uint32_t player, uint32_t controller, bool aim) {
     if (OnTurret(controller)) return;  // the turret takes the mouse
     float dx;
     float dy;
-    if (!input::TakeMouse(dx, dy)) return;
+    if (!input::TakeMouse(dx, dy, aim)) return;
     uint16_t state = G<uint16_t>(player + kPlayerState);
     if (state == kGuiding) {
         g_missile_dx += dx;
@@ -136,10 +136,6 @@ void MouseLook(uint32_t player, uint32_t controller, bool aim) {
     if (!Looks(state)) return;
     g_missile_dx = 0.0f;
     g_missile_dy = 0.0f;
-    if (aim) {
-        dx *= game::Opt().aim_horizontal_sensitivity;
-        dy *= game::Opt().aim_vertical_sensitivity;
-    }
     float per_count = kRadiansPerCount / std::max(G<float>(controller + kControllerZoom), 1.0f);
     if (SightMoves(player)) {
         MoveSight(controller, dx * per_count, -dy * per_count);

@@ -103,7 +103,10 @@ const char* const kDisplayModeNames[] = {"FULLSCREEN", "BORDERLESS", "WINDOWED"}
 constexpr int kDisplayModeCount = int(std::size(kDisplayModeNames));
 
 constexpr int kTenthsPerUnit = 10;
-constexpr int kSensitivitySlots = 50;  // 0.1 to 5.0 in tenths
+constexpr int kSensitivitySlots = 50;  // 0.1 to 5.0 in tenths, the gyro's
+// the sensitivity rows show five times the stored value, so the game's own 1.0 reads 5.0
+constexpr float kShownPerStored = 5.0f;
+constexpr int kShownSlots = 200;  // 0.1 to 20.0 in tenths
 
 constexpr int kRenderMin = 20;
 constexpr int kRenderMax = 200;
@@ -388,9 +391,19 @@ std::string StepTenths(float& sensitivity, int step) {
     return SensitivityText(tenths);
 }
 
+std::string StepShownTenths(float& sensitivity, int step) {
+    int tenths = int(std::lround(sensitivity * kShownPerStored * kTenthsPerUnit));
+    int slot = std::clamp(tenths, 1, kShownSlots) - 1;
+    if (step) {
+        slot = StepIndex(slot, step, kShownSlots);
+        sensitivity = float(slot + 1) / (kShownPerStored * kTenthsPerUnit);
+    }
+    return SensitivityText(slot + 1);
+}
+
 template <float game::Options::*Value>
 std::string StepSensitivity(Settings&, int step) {
-    return StepTenths(game::Opt().*Value, step);
+    return StepShownTenths(game::Opt().*Value, step);
 }
 
 // 0.1 to 1.0 in tenths, the game's own shown until one is picked
@@ -706,8 +719,8 @@ const std::vector<Row>& InputRows() {
     static const std::vector<Row> list = [] {
         std::vector<Row> out = {
             {Kind::Heading, -1, "MOUSE"},
-            {Kind::Value, kMouseHorizontalRow, "MOUSE HORIZONTAL SENSITIVITY"},
-            {Kind::Value, kMouseVerticalRow, "MOUSE VERTICAL SENSITIVITY"},
+            {Kind::Value, kMouseHorizontalRow, "HORIZONTAL SENSITIVITY"},
+            {Kind::Value, kMouseVerticalRow, "VERTICAL SENSITIVITY"},
             {Kind::Value, kAimHorizontalRow, "AIM HORIZONTAL SENSITIVITY"},
             {Kind::Value, kAimVerticalRow, "AIM VERTICAL SENSITIVITY"},
             {Kind::Value, kInvertXRow, "INVERT X AXIS"},
@@ -731,8 +744,8 @@ const std::vector<Row>& InputRows() {
 
 constexpr Row kPadRows[] = {
     {Kind::Heading, -1, "GENERAL"},
-    {Kind::Value, kPadHorizontalRow, "CONTROLLER HORIZONTAL SENSITIVITY"},
-    {Kind::Value, kPadVerticalRow, "CONTROLLER VERTICAL SENSITIVITY"},
+    {Kind::Value, kPadHorizontalRow, "HORIZONTAL SENSITIVITY"},
+    {Kind::Value, kPadVerticalRow, "VERTICAL SENSITIVITY"},
     {Kind::Value, kPadAimHorizontalRow, "AIM HORIZONTAL SENSITIVITY"},
     {Kind::Value, kPadAimVerticalRow, "AIM VERTICAL SENSITIVITY"},
     {Kind::Value, kPadInvertXRow, "INVERT X AXIS"},
