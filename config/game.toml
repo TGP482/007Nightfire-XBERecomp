@@ -422,6 +422,11 @@ at = 0x22965
 call = "BombLaserDamage"
 on_true = 0x2298F
 
+# a flash grenade's white fades out in its time at any frame rate (src/game/flash_grenade.cpp)
+[[hook]]
+at = 0xAB161
+call = "FlashFadeTime"
+
 # argument locations in API order for functions a link time code generated library compiled with another
 # convention: a register (eax ebx ecx edx esi edi ebp) or "stack" for the next stack slot, which the callee pops
 [abi]
