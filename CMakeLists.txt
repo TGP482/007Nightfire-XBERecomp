@@ -25,8 +25,9 @@ include(cmake/image_module.cmake)
 
 file(GLOB XBE_HOST_SOURCES CONFIGURE_DEPENDS src/*/*.cpp)
 list(FILTER XBE_HOST_SOURCES EXCLUDE REGEX "/src/(game|driving|launcher)/")
-# SDL's headers go to the gyro code too (SDL is linked LINK_ONLY)
-set_source_files_properties(src/common/gyro.cpp PROPERTIES INCLUDE_DIRECTORIES "${sdl3_SOURCE_DIR}/include")
+# SDL's headers go to the gyro code and the compiler window too (SDL is linked LINK_ONLY)
+set_source_files_properties(src/common/gyro.cpp src/app/game_code.cpp
+                            PROPERTIES INCLUDE_DIRECTORIES "${sdl3_SOURCE_DIR}/include")
 # src/d3d, src/dsound and src/audio replace the SDK's Direct3D, renderer, render thread, DirectSound and audio
 # output; src/app and src/kernel its code builder and relaunch, which go through nightfire.exe
 list(FILTER XBE_RUNTIME_SOURCES EXCLUDE REGEX "/(xdk/dsound|xdk/d3d8|gpu/d3d12|gpu/render_thread|audio/xaudio2|app/game_code|kernel/boot)\\.cpp$")
