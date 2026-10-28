@@ -13,6 +13,8 @@ double FrameTicks();    // console ticks this frame covers
 uint32_t FrameTicksCrossed();
 uint32_t UpdateCount();
 double TickCarry();  // of a tick, real time the game clock has not counted yet
+double Between();    // in a cutscene, the share of the next tick the frame is drawn at, else 1
+uint32_t FrameCount();  // of the game loop
 
 double Ease(double gain);      // a share taken once per tick, for this update
 double Decay(double factor);   // a factor applied once per tick, for this update
@@ -21,5 +23,7 @@ double Decay(double factor);   // a factor applied once per tick, for this updat
 void AddSteps(X86Context& ctx, double step);       // st0 = value + step
 void ApplyFactor(X86Context& ctx, double factor);  // st0 = value * factor
 void ScaleShare(X86Context& ctx, double share);    // st0 = difference, about to be multiplied by share
+
+bool Cutscene();  // fov.cpp: a cutscene's camera, the opening level's sniper or a scene the level's script plays
 
 }  // namespace driving

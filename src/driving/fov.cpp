@@ -4,6 +4,7 @@
 
 #include "common/aspect.h"
 #include "common/options.h"
+#include "driving/frame_rate.h"
 #include "xdk/hle.h"
 
 // Field of view: the view's draw (0x96EB0) takes the camera's angle (+0xB4, 33 unzoomed) twice as its horizontal
@@ -51,15 +52,18 @@ constexpr uint32_t kCutsceneCameras[] = {
     0x886F0,  // Ellipse
     0x85160,  // Fixed
 };
+constexpr uint32_t kSniperLook = 0x857D0;  // the opening level's sniper, whose script waits on its shots
 
 // the player, and its turret's camera while it is in one
 constexpr uint32_t kPlayer = 0x239220;
 constexpr uint32_t kPlayerCamera = 0x47C;
+constexpr uint32_t kScriptedScene = 0x4F0;  // flags a level's script sets while it plays a scene (0xB8160)
 constexpr uint32_t kCameraAngle = 0xB4;  // of a camera and of the player's eyes
 constexpr uint32_t kViewCamera = 0x4;    // of the draw's view, in esi
 constexpr float kUnzoomed = 33.0f;
 
 bool g_cutscene = false;  // the player camera's type is a cutscene's
+bool g_sniper = false;    // the player camera is the opening level's sniper
 float g_zoom = kUnzoomed;  // the angle the player's zoom eases to, kUnzoomed while it does not zoom
 
 float HalfTan(float degrees) { return std::tan(degrees / 2 / kDegrees); }
@@ -85,6 +89,15 @@ float SettingDegrees(float degrees, float camera_angle) {
 }
 
 }  // namespace
+
+namespace driving {
+
+bool Cutscene() {
+    uint32_t player = R32(kPlayer);
+    return g_cutscene || g_sniper || (player && R32(player + kScriptedScene));
+}
+
+}  // namespace driving
 
 // at 0x96F76, after the camera's sway is added and before the projection takes the angle
 void DrivingFov(X86Context& ctx, uint8_t*) {
@@ -114,6 +127,7 @@ void DrivingCameraType(X86Context& ctx, uint8_t*) {
     uint32_t update = R32(type + kTypeUpdate);
     const uint32_t* end = std::end(kCutsceneCameras);
     g_cutscene = std::find(std::begin(kCutsceneCameras), end, update) != end;
+    g_sniper = update == kSniperLook;
 }
 
 // at 0x8A490, before the cull (0x8D440) takes the camera's angle

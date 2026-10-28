@@ -354,6 +354,11 @@ call = "DrivingCullFov"
 at = 0x8782E
 call = "DrivingCameraType"
 
+# cutscenes are drawn between their last two ticks: the camera (src/driving/cutscene_motion.cpp)
+[[hook]]
+at = 0x96EF0
+call = "DrivingCameraCopy"
+
 # real time updates: the audio clock and game time count whole console ticks (src/driving/frame_rate.cpp)
 [[hook]]
 at = 0x4DDD5
