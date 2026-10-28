@@ -29,6 +29,8 @@ void DrivingStepRate(X86Context& ctx, uint8_t*) { Top(ctx) /= driving::UpdateTic
 void DrivingStepFactor(X86Context& ctx, uint8_t*) { Top(ctx) = driving::Decay(Top(ctx)); }
 // before a countdown takes 1.0 off st0
 void DrivingCountdownStep(X86Context& ctx, uint8_t*) { Top(ctx) += 1.0 - driving::UpdateTicks(); }
+// a whole step, taken only on an update that crossed a tick
+void DrivingTickStep(X86Context& ctx, uint8_t*) { if (!driving::UpdateTicked()) Top(ctx) = 0.0; }
 
 // guest stack slots, before a call or at a function's entry
 void DrivingEsp4Amount(X86Context& ctx, uint8_t*) { AmountSlot(ctx, 0x4); }

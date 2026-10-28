@@ -87,9 +87,9 @@ struct CameraPose {
 
 struct Camera {
     CameraPose before;
-    CameraPose after;
-    uint32_t sampled = 0;
+    CameraPose after;  // as the game left it
     uint32_t seen = 0;  // the draw a view last drew with it
+    bool shown = false;
 };
 
 // ticks are named by the game loop's frame that ran them
@@ -269,26 +269,28 @@ void PutCharactersBack() {
     }
 }
 
-// the camera's last two ticks, the newest read when a tick has run since
-Camera& Track(uint32_t camera) {
-    Camera& tracked = g_cameras[camera];
-    if (tracked.sampled == g_tick) return tracked;
-    CameraPose now = ReadCamera(camera);
-    tracked.before = tracked.sampled == g_last_tick ? tracked.after : now;
-    tracked.after = now;
-    tracked.sampled = g_tick;
-    return tracked;
-}
-
-// the cameras the views drew with last time, between their ticks for this draw
-void ShowCameras() {
-    float share = float(driving::Between());
+// each draw: a camera the game moved since the last draw keeps where it was as before, unless this draw is not
+// between ticks
+void SampleCameras(bool between) {
     for (auto it = g_cameras.begin(); it != g_cameras.end();) {
         if (it->second.seen + 1 < g_draw) it = g_cameras.erase(it);
         else ++it;
     }
     for (auto& [camera, tracked] : g_cameras) {
-        Track(camera);
+        CameraPose now = ReadCamera(camera);
+        if (std::memcmp(&now, &tracked.after, sizeof(now)) != 0) {
+            tracked.before = between ? tracked.after : now;
+            tracked.after = now;
+        } else if (!between) {
+            tracked.before = now;
+        }
+    }
+}
+
+// the cameras the views drew with last time, between their last two places for this draw
+void ShowCameras() {
+    float share = float(driving::Between());
+    for (auto& [camera, tracked] : g_cameras) {
         if (Distance(&tracked.before.world[12], &tracked.after.world[12]) > kCut) continue;
         CameraPose between;
         Lerp(between.world, tracked.before.world, tracked.after.world, 16, share);
@@ -296,12 +298,15 @@ void ShowCameras() {
         Lerp(between.view, tracked.before.view, tracked.after.view, 16, share);
         between.angle = tracked.before.angle + (tracked.after.angle - tracked.before.angle) * share;
         WriteCamera(camera, between);
+        tracked.shown = true;
     }
 }
 
+// the cameras as the game left them
 void PutCamerasBack() {
     for (auto& [camera, tracked] : g_cameras) {
-        if (tracked.sampled == g_tick) WriteCamera(camera, tracked.after);
+        if (tracked.shown) WriteCamera(camera, tracked.after);
+        tracked.shown = false;
     }
 }
 
@@ -317,8 +322,8 @@ X86_FUNC(sub_00035610) {
         if (!temporary && Interpolating()) Blend(frame);
         return;
     }
+    NoteTick();  // on every tick, so a cutscene's first draw finds none of the last cutscene's ticks
     if (driving::Cutscene() && !temporary) {
-        NoteTick();
         Moving& moving = g_moving[frame];
         if (moving.copied != g_tick && moving.sampled != g_tick) moving.before = ReadFrame(frame);
         moving.copied = g_tick;
@@ -360,7 +365,11 @@ X86_FUNC(sub_00012EC0) {
 // at 0x96EF0, the view's draw (esi) has copied its camera: a camera the next draws show between its ticks
 void DrivingCameraCopy(X86Context& ctx, uint8_t*) {
     uint32_t camera = R32(ctx.esi + kViewCamera);
-    if (!g_cameras.count(camera)) Track(camera);
+    if (!g_cameras.count(camera)) {
+        Camera& tracked = g_cameras[camera];
+        tracked.after = ReadCamera(camera);
+        tracked.before = tracked.after;
+    }
     g_cameras[camera].seen = g_draw;
 }
 
@@ -370,6 +379,7 @@ X86_FUNC(sub_0008BF30) {
     g_drawing = true;
     g_draw++;
     bool between = Interpolating();
+    SampleCameras(between);
     if (between) {
         ShowCameras();
         ShowCharacters();
@@ -381,9 +391,7 @@ X86_FUNC(sub_0008BF30) {
     }
     __imp__sub_0008BF30(ctx, base);
     PutBack();
-    if (between) {
-        PutCamerasBack();
-        PutCharactersBack();
-    }
+    PutCamerasBack();
+    if (between) PutCharactersBack();
     g_drawing = false;
 }
