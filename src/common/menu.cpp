@@ -383,7 +383,7 @@ const char* const kLanguageNames[] = {"AUTOMATIC", "ENGLISH", "FRENCH", "GERMAN"
 std::string StepLanguage(Settings&, int step) {
     uint32_t& language = game::Opt().language;
     std::string name = kLanguageNames[StepTable(kLanguageSettings, language, step)];
-    bool restart = game::LanguageId(language) != game::BootLanguage();
+    bool restart = game::LanguageId(language) != game::GameLanguage();
     return restart ? name + " (RESTART)" : name;
 }
 

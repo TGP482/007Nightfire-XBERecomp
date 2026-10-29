@@ -194,20 +194,17 @@ constexpr Entry kEntries[] = {
     {"Are you sure you want to exit?", {u"Voulez-vous vraiment quitter ?", u"Möchtest du das Spiel wirklich beenden?", u"Vuoi davvero uscire?", u"¿Seguro que quieres salir?", u"Weet je zeker dat je wilt afsluiten?", u"Är du säker på att du vill avsluta?"}},
 };
 
-// the column of kEntries for the language this run started with, -1 for English
+// the column of kEntries for the language the game runs in, -1 for English
 int Column() {
-    static const int column = [] {
-        switch (game::BootLanguage()) {
-            case game::kFrench: return 0;
-            case game::kGerman: return 1;
-            case game::kItalian: return 2;
-            case game::kSpanish: return 3;
-            case game::kDutch: return 4;
-            case game::kSwedish: return 5;
-            default: return -1;
-        }
-    }();
-    return column;
+    switch (game::GameLanguage()) {
+        case game::kFrench: return 0;
+        case game::kGerman: return 1;
+        case game::kItalian: return 2;
+        case game::kSpanish: return 3;
+        case game::kDutch: return 4;
+        case game::kSwedish: return 5;
+        default: return -1;
+    }
 }
 
 bool Same(std::string_view a, std::string_view b) {
@@ -297,12 +294,12 @@ std::string Cached(Cache& cache, std::string_view english, std::string (*make)(s
 
 std::string game::GameText(std::string_view english) {
     if (Column() < 0) return std::string(english);
-    static Cache cache;
-    return Cached(cache, english, Latin1);
+    static Cache caches[kLanguageCount];
+    return Cached(caches[Column()], english, Latin1);
 }
 
 std::string game::PanelText(std::string_view english) {
     if (Column() < 0) return std::string(english);
-    static Cache cache;
-    return Cached(cache, english, Utf8);
+    static Cache caches[kLanguageCount];
+    return Cached(caches[Column()], english, Utf8);
 }

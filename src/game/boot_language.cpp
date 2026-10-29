@@ -25,3 +25,8 @@ X86_FUNC(sub_000DBE10) {
     if (!usa_english) kernel::G<uint32_t>(kLanguage) = language;
     kernel::G<uint8_t>(kAskOnBoot) = 0;
 }
+
+uint32_t game::GameLanguage() {
+    uint32_t language = kernel::G<uint32_t>(kLanguage);
+    return language == kAmerican ? kEnglish : language;
+}
