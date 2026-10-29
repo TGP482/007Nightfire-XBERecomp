@@ -7,8 +7,8 @@
 // Player 1's options come in the launch data default.xbe hands over (0x19A10, kept at 0x243B90), which goes back with
 // them when the mission ends (0x130740) for default.xbe to read (0x19E40). The engine reads vibration, the aims and the
 // weapon switch there as it goes; the HUD (0xD7DA0), subtitles (0x5A254) and volumes (0x5B47E) copy theirs at the
-// mission's start, so a change is copied on to them. Crouch and flashing objects only go back. Subtitles going off
-// also empty the subtitle box, so the line showing goes too.
+// mission's start, so a change is copied on to them. Crouch and flashing objects only go back. The subtitle box
+// (0xE39B0) takes its lines while subtitles are off too and only does not draw them, so a line showing comes back.
 namespace {
 
 using game::GameOption;
@@ -60,9 +60,6 @@ constexpr uint32_t kFindGroup = 0x11D720;  // (name)
 constexpr uint32_t kGroupLevel = 0x4;
 constexpr uint32_t kGroupLastLevel = 0x8;
 constexpr float kPercent = 0.01f;
-// the subtitle box (0xE3180 returns it), which 0xE3630 empties, thiscall
-constexpr uint32_t kSubtitleBox = 0x23F828;
-constexpr uint32_t kEmptyBox = 0xE3630;
 
 void ApplyVolume(X86Context& ctx, uint32_t group_name, uint32_t level, uint32_t volume) {
     float share = float(R32(volume)) * kPercent;
@@ -72,21 +69,18 @@ void ApplyVolume(X86Context& ctx, uint32_t group_name, uint32_t level, uint32_t 
     G<float>(group + kGroupLevel) = share;
 }
 
-void EmptySubtitleBox(X86Context& ctx) {
-    uint32_t box = R32(kSubtitleBox);
-    if (!box) return;
-    uint32_t ecx = ctx.ecx;
-    ctx.ecx = box;
-    kernel::CallGuest(ctx, kEmptyBox, {});
-    ctx.ecx = ecx;
-}
-
 }  // namespace
 
 const GameOption* game::GameOptions(size_t* count) {
     *count = std::size(kOptions);
     return kOptions;
 }
+
+// the subtitle tests of a sound's line (0x44760) and its timed lines (0x44970)
+bool DrivingQueueSubtitle(X86Context&, uint8_t*) { return true; }
+
+// at 0xE3A45, the subtitle box's draw
+bool DrivingSubtitleHidden(X86Context&, uint8_t*) { return R32(kSubtitles) == 0; }
 
 void game::SaveChangedOptions(X86Context& ctx) {
     if (!g_options_changed) return;
@@ -97,7 +91,6 @@ void game::SaveChangedOptions(X86Context& ctx) {
         G<uint8_t>(hud + kCrosshairsHiddenCopy) = R32(kCrosshairsHidden) != 0;
     }
     G<uint8_t>(kSubtitlesCopy) = R32(kSubtitles) != 0;
-    if (!R32(kSubtitles)) EmptySubtitleBox(ctx);
     kernel::W32(kMusicBack, R32(kMusic));
     kernel::W32(kEffectsBack, R32(kEffects));
     ApplyVolume(ctx, kMusicGroup, kMusicLevel, kMusic);

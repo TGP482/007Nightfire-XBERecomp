@@ -1,3 +1,4 @@
+#include <array>
 #include <iterator>
 
 #include "common/game_options.h"
@@ -7,7 +8,7 @@
 
 // Player 1's options, as the main menu's Advanced Options (0x8D0F0) and AV Options (0x8D7A0) pages set them. The
 // music update applies its volume each frame (0xC9030), the effects read theirs as they play. Subtitles only stop new
-// lines (0xD1D70), so the ones showing are ended when they go off.
+// lines (0xD1D70), so the lines queue while they are off too and are hidden instead, to show again when turned on.
 namespace {
 
 using game::GameOption;
@@ -63,37 +64,56 @@ bool CanSave() {
     return loaded && idle && G<uint8_t>(kSaveAllowed);
 }
 
-// the messages 0xD1D70 queues, +4 the next; a subtitle's kind is 4 (or 5, which 0xD1D70 makes of some 4s), and it
-// ends once its time is spent, as the game ends messages itself (0xD1E4E)
+// the subtitle lines' text items, 0xD2360 the first and 0xD2400 the other two; +0x38 0xFF hides one
 constexpr uint32_t kSubtitles = 0x1F6614;
-constexpr uint32_t kMessages = 0x29AC04;
-constexpr uint32_t kNextMessage = 0x4;
-constexpr uint32_t kMessageTime = 0x18;  // float, 60 fps frames left
-constexpr uint32_t kMessageKind = 0x1C;  // byte
-constexpr uint8_t kSubtitleKinds[] = {4, 5};
-constexpr float kSpent = -1.0f;
+constexpr uint32_t kSubtitleItems[] = {0x29AE24, 0x29AE28, 0x29AE2C};
+constexpr uint32_t kItemShown = 0x38;
+constexpr uint8_t kHidden = 0xFF;
 
-bool Subtitle(uint32_t message) {
-    uint8_t kind = kernel::G<uint8_t>(message + kMessageKind);
-    return kind == kSubtitleKinds[0] || kind == kSubtitleKinds[1];
+std::array<uint8_t, std::size(kSubtitleItems)> g_shown{};  // as the game left them, while hidden
+bool g_subtitles_hidden = false;
+
+// null before the items are made
+uint8_t* ShownByte(size_t line) {
+    uint32_t item = kernel::R32(kSubtitleItems[line]);
+    return item ? &kernel::G<uint8_t>(item + kItemShown) : nullptr;
 }
 
-void EndSubtitles() {
-    for (uint32_t m = kernel::R32(kMessages); m; m = kernel::R32(m + kNextMessage))
-        if (Subtitle(m)) kernel::G<float>(m + kMessageTime) = kSpent;
+void HideSubtitles() {
+    for (size_t i = 0; i < g_shown.size(); i++) {
+        uint8_t* shown = ShownByte(i);
+        if (!shown) continue;
+        g_shown[i] = *shown;
+        *shown = kHidden;
+    }
 }
 
-void UpdateSubtitles() {
-    static bool shown = true;
+void RestoreSubtitles() {
+    for (size_t i = 0; i < g_shown.size(); i++)
+        if (uint8_t* shown = ShownByte(i)) *shown = g_shown[i];
+}
+
+// the lines show and time out as the game runs them, and stay hidden while subtitles are off
+void ShowSubtitles(X86Context& ctx, uint8_t* base, void (*show)(X86Context&, uint8_t*)) {
     bool on = kernel::R32(kSubtitles) != 0;
-    if (shown && !on) EndSubtitles();
-    shown = on;
+    if (on && g_subtitles_hidden) RestoreSubtitles();
+    show(ctx, base);
+    if (!on) HideSubtitles();
+    g_subtitles_hidden = !on;
 }
 
 }  // namespace
 
+// the subtitle tests of 0xD1D70 and of a sound's line (0xCBD10)
+bool QueueSubtitle(X86Context&, uint8_t*) { return true; }
+
+X86_EXTERN_FUNC(__imp__sub_000D2360);
+X86_FUNC(sub_000D2360) { ShowSubtitles(ctx, base, __imp__sub_000D2360); }
+
+X86_EXTERN_FUNC(__imp__sub_000D2400);
+X86_FUNC(sub_000D2400) { ShowSubtitles(ctx, base, __imp__sub_000D2400); }
+
 void game::SaveChangedOptions(X86Context& ctx) {
-    UpdateSubtitles();
     if (!g_options_changed || app::MenuOpen() || !CanSave()) return;
     g_options_changed = false;
     kernel::CallGuest(ctx, kCopyToProfile, {kPlayer1, kernel::R32(kProfileSlot)});
