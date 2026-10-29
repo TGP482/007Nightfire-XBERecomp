@@ -427,6 +427,13 @@ on_true = 0x2298F
 at = 0xAB161
 call = "FlashFadeTime"
 
+# a shot sweeps or tests a sphere as its 60 fps step would (src/game/shot_hits.cpp)
+[[hook]]
+at = 0x23E86
+call = "ShotSweeps"
+on_true = 0x23EBD
+on_false = 0x23E99
+
 # argument locations in API order for functions a link time code generated library compiled with another
 # convention: a register (eax ebx ecx edx esi edi ebp) or "stack" for the next stack slot, which the callee pops
 [abi]
