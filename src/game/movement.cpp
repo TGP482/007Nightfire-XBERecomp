@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <unordered_map>
 
 #include "xdk/hle.h"
 
@@ -38,7 +39,9 @@ bool WalkSpeed(X86Context& ctx, uint8_t*) {
 }
 
 // The grapple's pull (0xAA340) speeds up 0.05 a frame to 1.5 (0.5 in multiplayer) and moves that far each frame,
-// and Bond lets go if he is on the ground once 15 frames have passed. Both run as at 60 fps.
+// and Bond lets go if he is on the ground once 15 frames have passed. Both run as at 60 fps. It ends on the first frame
+// he is within 2 of the point, up to 1.5 further on at 60 fps, which carries him up into vents; it ends on a 60 fps
+// frame too.
 namespace {
 
 // the grapple, Bond's state +0xF4: its point, then
@@ -51,6 +54,8 @@ constexpr float kPullFrames = 15.0f;
 constexpr uint32_t kMultiplayer = 0x260018;
 constexpr uint32_t kBondPosition = 0x24;
 constexpr uint32_t kPullDirection = 0xC;  // the direction vector 0xAA4EB points eax at, from the stack pointer
+
+std::unordered_map<uint32_t, double> g_pull_frames;  // grapple -> 60 fps frames pulled
 
 float Distance(uint32_t a, uint32_t b) {
     float x = G<float>(a) - G<float>(b);
@@ -68,11 +73,19 @@ bool GrapplePull(X86Context& ctx, uint8_t*) {
     float& step = G<float>(ctx.esi + kPullStep);
     float speed = std::min(step / frames + kPullGain * frames, top);  // per 60 fps frame
     step = std::min(speed * frames, Distance(ctx.edi + kBondPosition, ctx.esi));
+    g_pull_frames[ctx.esi] += frames;
     ctx.eax = ctx.esp + kPullDirection;
     return true;
+}
+
+// at 0xAA4A1, Bond is within 2 of the point; true pulls on until a 60 fps frame ends (grapple in esi)
+bool GrappleArrival(X86Context& ctx, uint8_t*) {
+    double before = g_pull_frames[ctx.esi];
+    return std::floor(before + G<float>(kStepScale)) == std::floor(before);
 }
 
 // at 0xAA334, once a grapple's start set its time; grapple in edi
 void GrappleStartTime(X86Context& ctx, uint8_t*) {
     G<uint16_t>(ctx.edi + kPullTime) = uint16_t(std::lround(kPullFrames / G<float>(kStepScale)));
+    g_pull_frames[ctx.edi] = 0.0;
 }

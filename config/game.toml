@@ -302,6 +302,11 @@ on_true = 0xAA4F2
 at = 0xAA334
 call = "GrappleStartTime"
 
+[[hook]]
+at = 0xAA4A1
+call = "GrappleArrival"
+on_true = 0xAA4A9
+
 # the mouse turns a guided missile (src/game/mouse.cpp)
 [[hook]]
 at = 0x23838
@@ -432,21 +437,25 @@ on_true = 0x2298F
 at = 0xAB161
 call = "FlashFadeTime"
 
-# a shot sweeps or tests a sphere as its 60 fps step would (src/game/shot_hits.cpp)
+# a shot tests for hits once per 60 fps frame, as its 60 fps step would (src/game/shot_hits.cpp)
+[[hook]]
+at = 0x23DC3
+call = "ShotWaits"
+on_true = 0x23F44
+
 [[hook]]
 at = 0x23E86
 call = "ShotSweeps"
 on_true = 0x23EBD
 on_false = 0x23E99
 
-# Bond walks and collides by his 60 fps step on the ground, so he climbs small ledges (src/game/ledges.cpp)
 [[hook]]
-at = 0xAD942
-call = "LedgeStepStart"
+at = 0x23EB8
+call = "ShotSphereFrom"
 
 [[hook]]
-at = 0xAE427
-call = "LedgeStepEnd"
+at = 0x23F32
+call = "ShotSweepFrom"
 
 # argument locations in API order for functions a link time code generated library compiled with another
 # convention: a register (eax ebx ecx edx esi edi ebp) or "stack" for the next stack slot, which the callee pops
