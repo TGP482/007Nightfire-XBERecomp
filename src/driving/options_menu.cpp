@@ -74,6 +74,8 @@ constexpr uint32_t kSetScale = 0xD61E0;    // (x scale, y scale)
 constexpr uint32_t kMeasure = 0xD5AD0;     // (text): its width in st(0)
 constexpr uint32_t kMeasureHeight = 0xD5B00;  // (text): its height in st(0)
 constexpr uint32_t kDrawText = 0xD6520;    // (text, x, y)
+constexpr uint32_t kGlyphBounds = 0x107B30;  // cdecl (font, text, left, top, width, height)
+constexpr uint32_t kRendererFont = 0xA8;
 constexpr uint32_t kPlaySound = 0x11E010;  // cdecl (8, sound, bank, 2), as the menu's dpad plays it
 constexpr uint32_t kSoundToggle = 0x1A000C;  // "SFX_Toggle"
 constexpr uint32_t kSoundBank = 0x19372C;    // "Menu Sounds"
@@ -93,6 +95,7 @@ constexpr uint32_t kDisplayWidth = 0x40;      // int
 constexpr uint32_t kDisplayHeight = 0x44;
 constexpr uint32_t kDisplayFit = 0x48;
 constexpr uint32_t kFitFill = 2;
+constexpr float kWideNarrow = 0.75f;  // the text draw's glyph width on a widescreen output
 constexpr float kTabsLeft = 80.0f;
 constexpr float kTabsSpan = 485.0f;  // the room the tabs are spread over, past their labels
 constexpr float kTabRaise = 4.0f;    // below the first tab object's y
@@ -100,6 +103,7 @@ constexpr float kTabRaise = 4.0f;    // below the first tab object's y
 constexpr float kLinesLeft = kTabsLeft;
 constexpr float kLinesRight = kTabsLeft + kTabsSpan;
 constexpr float kBoxBottom = 310.0f;
+constexpr float kRowPitch = 24.0f;  // tighter than the mission lines' 34
 constexpr float kFrameWidth = 640.0f;  // the pause lays out its text on the 640x480 frame
 constexpr float kFrameHeight = 480.0f;
 
@@ -122,7 +126,8 @@ constexpr uint32_t kMaxLines = 16;  // shown at once; the text draw may keep the
 constexpr uint32_t kRecompAt = 0;
 constexpr uint32_t kChangeAt = kMaxText;
 constexpr uint32_t kLinesAt = kChangeAt + kMaxText;
-constexpr uint32_t kScratchSize = kLinesAt + kMaxLines * 2 * kMaxText;
+constexpr uint32_t kBoundsAt = kLinesAt + kMaxLines * 2 * kMaxText;  // a text's left and width
+constexpr uint32_t kScratchSize = kBoundsAt + 8;
 
 struct Page {
     app::RecompPages pages;
@@ -142,13 +147,24 @@ uint32_t Scratch() {
     return base;
 }
 
-uint32_t GuestText(uint32_t slot, const std::string& english) {
+uint32_t WriteGuest(uint32_t slot, const std::string& text) {
     uint32_t at = Scratch() + slot;
-    std::string text = game::GameText(english);
     size_t length = std::min<size_t>(text.size(), kMaxText - 1);
     std::memcpy(kernel::HostPtr(at), text.data(), length);
     G<char>(at + uint32_t(length)) = 0;
     return at;
+}
+
+uint32_t GuestText(uint32_t slot, const std::string& english) { return WriteGuest(slot, game::GameText(english)); }
+
+// the text draw formats its text (vsprintf at 0x1073A0), so a % is doubled to stay a %
+uint32_t DrawnText(uint32_t slot, const std::string& english) {
+    std::string text;
+    for (char c : game::GameText(english)) {
+        text += c;
+        if (c == '%') text += '%';
+    }
+    return WriteGuest(slot, text);
 }
 
 uint32_t Bits(float value) { return std::bit_cast<uint32_t>(value); }
@@ -202,6 +218,26 @@ void Draw(X86Context& ctx, const Pen& pen, uint32_t text, float x, float y, uint
     CallThis(ctx, kDrawText, pen.renderer, {text, Bits(x), Bits(y)});
 }
 
+// the right edge of a text's glyphs from where it is drawn; the width alone misses the first glyph's left bearing
+float RightEdge(X86Context& ctx, const Pen& pen, uint32_t text) {
+    CallThis(ctx, kSetFont, pen.renderer, {pen.font});
+    CallThis(ctx, kSetScale, pen.renderer, {R32(kTextScale), R32(kTextScale)});
+    uint32_t left = Scratch() + kBoundsAt;
+    uint32_t width = left + 4;
+    kernel::CallGuest(ctx, kGlyphBounds, {R32(pen.renderer + kRendererFont), text, left, 0, width, 0});
+    return G<float>(left) + G<float>(width);
+}
+
+// A value's x, so its right edge lands on kLinesRight. The text draw (0xD6520) narrows glyphs to 3/4 on a widescreen
+// output; in the fill mode it narrows their place about the middle too, so there the width counts in full.
+float ValueX(X86Context& ctx, const Pen& pen, uint32_t text) {
+    uint32_t display = R32(kDisplay);
+    bool wide = display && G<uint8_t>(display + kDisplayWide);
+    bool fill = wide && R32(display + kDisplayFit) == kFitFill;
+    float narrow = wide && !fill ? kWideNarrow : 1.0f;
+    return kLinesRight - RightEdge(ctx, pen, text) * narrow;
+}
+
 // The tab strip: the stock labels and RECOMP spread over the stock span, the selected one lit.
 
 struct TabLabel {
@@ -249,7 +285,7 @@ void DrawTabs(X86Context& ctx, uint32_t menu) {
     }
 }
 
-// The page: as many lines as the objectives' box holds, scrolled to the selected one.
+// The page: from one line under the tabs, as many lines as the objectives' box holds, scrolled to the selected one.
 
 struct Lines {
     float first_y;
@@ -258,8 +294,9 @@ struct Lines {
 };
 
 Lines LinesFor(uint32_t menu) {
-    float first = ObjectY(menu, kFirstMissionLine);
-    float pitch = ObjectY(menu, kSecondMissionLine) - first;
+    float stock_pitch = ObjectY(menu, kSecondMissionLine) - ObjectY(menu, kFirstMissionLine);
+    float first = ObjectY(menu, kStockTabs[0]) + stock_pitch;
+    float pitch = kRowPitch;
     int shown = pitch > 0.0f ? int((kBoxBottom - first) / pitch) : 1;
     shown = std::clamp(shown, 1, int(kMaxLines));
     static bool logged = false;
@@ -286,10 +323,10 @@ void DrawPage(X86Context& ctx, uint32_t menu) {
         const app::RecompPages::Line& line = lines[size_t(i)];
         float y = layout.first_y + layout.pitch * float(i - g_page.top);
         uint32_t colour = i == g_page.line ? kSelectedColour : kLineColour;
-        Draw(ctx, pen, GuestText(slot, line.label), kLinesLeft, y, colour);
+        Draw(ctx, pen, DrawnText(slot, line.label), kLinesLeft, y, colour);
         if (line.value.empty()) continue;
-        uint32_t value = GuestText(slot + kMaxText, line.value);
-        Draw(ctx, pen, value, kLinesRight - Measure(ctx, pen, value), y, colour);
+        float x = ValueX(ctx, pen, GuestText(slot + kMaxText, line.value));
+        Draw(ctx, pen, DrawnText(slot + kMaxText, line.value), x, y, colour);
     }
 }
 
@@ -434,7 +471,6 @@ bool ReadPointer(Pointer& p) {
 constexpr float kSafeScale = 0.9f;
 constexpr float kSafeMargin = 0.05f;
 constexpr float kSafeLift = 10.0f / kFrameHeight;
-constexpr float kWideNarrow = 0.75f;
 constexpr float kWideMiddle = 320.0f;
 
 struct Box {
@@ -614,7 +650,7 @@ Box RowBox(X86Context& ctx, const Pen& pen, const app::RecompPages::Line& line, 
     Box box = TextBox(ctx, pen, GuestText(slot, line.label), kLinesLeft, y);
     if (line.value.empty()) return box;
     uint32_t value = GuestText(slot + kMaxText, line.value);
-    return Joined(box, TextBox(ctx, pen, value, kLinesRight - Measure(ctx, pen, value), y));
+    return Joined(box, TextBox(ctx, pen, value, ValueX(ctx, pen, value), y));
 }
 
 // the RECOMP row under the pointer, -1 when none is
