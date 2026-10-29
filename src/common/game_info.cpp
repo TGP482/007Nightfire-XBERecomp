@@ -309,6 +309,7 @@ const app::GameInfo app::kGame = {
     .options = {{"skip_intros", &game::Opt().skip_intros, nullptr},
                 {"fps_counter", &game::Opt().fps_counter, nullptr},
                 {"pause_on_focus_loss", &game::Opt().pause_on_focus_loss, nullptr},
+                {"language", nullptr, &game::Opt().language},
                 {"invert_mouse", &game::Opt().invert_mouse, nullptr},
                 {"invert_mouse_x", &game::Opt().invert_mouse_x, nullptr},
                 {"invert_pad_x", &game::Opt().invert_pad_x, nullptr},

@@ -29,8 +29,8 @@ list(FILTER XBE_HOST_SOURCES EXCLUDE REGEX "/src/(game|driving|launcher)/")
 set_source_files_properties(src/common/gyro.cpp src/app/game_code.cpp
                             PROPERTIES INCLUDE_DIRECTORIES "${sdl3_SOURCE_DIR}/include")
 # src/d3d, src/dsound and src/audio replace the SDK's Direct3D, renderer, render thread, DirectSound and audio
-# output; src/app and src/kernel its code builder and relaunch, which go through nightfire.exe
-list(FILTER XBE_RUNTIME_SOURCES EXCLUDE REGEX "/(xdk/dsound|xdk/d3d8|gpu/d3d12|gpu/render_thread|audio/xaudio2|app/game_code|kernel/boot)\\.cpp$")
+# output; src/app and src/kernel its code builder, game check and relaunch, which go through nightfire.exe
+list(FILTER XBE_RUNTIME_SOURCES EXCLUDE REGEX "/(xdk/dsound|xdk/d3d8|gpu/d3d12|gpu/render_thread|audio/xaudio2|app/game_code|app/game_files|kernel/boot)\\.cpp$")
 
 # partitions as xbe_symbols wrote them into config/game.toml
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS config/game.toml)

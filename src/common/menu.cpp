@@ -374,6 +374,18 @@ std::string StepPauseOnFocusLoss(Settings&, int step) {
     return OnOff(on);
 }
 
+// AUTOMATIC then the game's languages, in game::Options::language order
+constexpr uint32_t kLanguageSettings[] = {0, 1, 2, 3, 4, 5, 6, 7};
+const char* const kLanguageNames[] = {"AUTOMATIC", "ENGLISH", "FRENCH", "GERMAN", "ITALIAN", "SPANISH", "DUTCH", "SWEDISH"};
+
+// the game reads its language once at boot
+std::string StepLanguage(Settings&, int step) {
+    uint32_t& language = game::Opt().language;
+    std::string name = kLanguageNames[StepTable(kLanguageSettings, language, step)];
+    bool restart = game::LanguageId(language) != game::BootLanguage();
+    return restart ? name + " (RESTART)" : name;
+}
+
 std::string SensitivityText(int tenths) {
     char text[16];
     std::snprintf(text, sizeof(text), "%.1f", float(tenths) / kTenthsPerUnit);
@@ -594,6 +606,7 @@ enum RowId {
     kTextureReplacementRow,
     kTextureDumpingRow,
     kDumpFormatRow,
+    kLanguageRow,
 };
 
 // in RowId order
@@ -644,6 +657,7 @@ constexpr StepFn kSteps[] = {
     StepTextureReplacement,
     StepTextureDumping,
     StepDumpFormat,
+    StepLanguage,
 };
 
 bool Held(int id) { return id == kMonitorRow || id == kDisplayModeRow || id == kResolutionRow; }
@@ -702,6 +716,7 @@ constexpr Row kSettingsRows[] = {
     {Kind::Heading, -1, "GENERAL"},
     {Kind::Value, kSkipIntrosRow, "SKIP INTROS"},
     {Kind::Value, kPauseOnFocusLossRow, "PAUSE ON FOCUS LOSS"},
+    {Kind::Value, kLanguageRow, "LANGUAGE"},
     {Kind::Value, kAudioOutputRow, "AUDIO OUTPUT"},
     {Kind::Heading, -1, "INPUT DEVICES"},
     {Kind::Value, kPlayer1Row, "PLAYER 1"},
@@ -894,6 +909,7 @@ void RestoreDefaults(int page) {
     game::Opt().smaa = game::Options{}.smaa;
     game::Opt().ambient_occlusion = game::Options{}.ambient_occlusion;
     game::Opt().pause_on_focus_loss = game::Options{}.pause_on_focus_loss;
+    game::Opt().language = game::Options{}.language;
     game::Opt().audio_output = game::Options{}.audio_output;
     audio::SetOutputMode(game::Opt().audio_output);
     game::Opt().monitor = game::Options{}.monitor;

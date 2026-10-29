@@ -21,6 +21,8 @@ inline constexpr float kMinDeadZone = 0.1f;
 inline constexpr uint32_t kMinVibration = 10;
 inline constexpr uint32_t kMaxVibration = 200;
 inline constexpr uint32_t kGameFov = 75;  // the game's 60 degrees vertical as horizontal degrees on a 4:3 frame
+// the game's language ids (0xDBE10); 6 is the USA disc's American English
+enum Language : uint32_t { kEnglish = 0, kFrench = 1, kGerman = 2, kSpanish = 3, kItalian = 4, kDutch = 5, kSwedish = 8 };
 
 struct Options {
     bool skip_intros = false;  // the EA GAMES and MGM INTERACTIVE logos at boot and the intro film
@@ -35,6 +37,7 @@ struct Options {
     uint32_t fmv_scale = 0;  // the full screen films on a wider screen: 0 fill it, 1 in a 4:3 frame
     uint32_t audio_output = 0;  // 0 automatic, 1 2.0 stereo, 2 5.1 surround, 3 mono
     bool pause_on_focus_loss = true;  // the game and its sound stop while the window is in the background
+    uint32_t language = 0;  // 0 the Windows display language, then English, French, German, Italian, Spanish, Dutch, Swedish
     float mouse_sensitivity = 1.0f;  // horizontal
     float mouse_vertical_sensitivity = 1.0f;
     // in manual aim or zoomed in, times the sensitivity above
@@ -58,6 +61,8 @@ struct Options {
 Options& Opt();
 bool ControllerPlugged(int slot);  // game_info.cpp
 int KeyboardPort();  // game_info.cpp: the port with the keyboard, -1 for none
+uint32_t LanguageId(uint32_t setting);  // language.cpp: the game's language for the language setting
+uint32_t BootLanguage();                // language.cpp: the game's language as this run started
 inline std::atomic<float> g_fps{0};  // from the host, for the game's own counter
 inline std::atomic<bool> g_hdr_display{false};  // the renderer's: the window's display has Windows HDR on
 inline std::atomic<bool> g_hud_hidden{false};  // the toggle HUD key's, not saved
