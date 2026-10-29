@@ -432,10 +432,15 @@ at = 0x22965
 call = "BombLaserDamage"
 on_true = 0x2298F
 
-# a flash grenade's white fades out in its time at any frame rate (src/game/flash_grenade.cpp)
+# a flash grenade blinds for its time at any frame rate (src/game/flash_grenade.cpp)
 [[hook]]
-at = 0xAB161
-call = "FlashFadeTime"
+at = 0x22750
+call = "FlashBlindTime"
+
+[[hook]]
+at = 0xAB0C3
+call = "FlashBlindStep"
+on_true = 0xAB0D5
 
 # a shot tests for hits once per 60 fps frame, as its 60 fps step would (src/game/shot_hits.cpp)
 [[hook]]
