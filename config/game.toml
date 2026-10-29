@@ -307,6 +307,11 @@ call = "GrappleStartTime"
 at = 0x23838
 call = "GuidedMissileMouse"
 
+# the mouse turns Bond in zero gravity (src/game/mouse.cpp)
+[[hook]]
+at = 0xAA805
+call = "ZeroGravityMouse"
+
 # an animation change with every layer taken skips its blend (src/game/frame_rate.cpp)
 [[hook]]
 at = 0x33F86
@@ -433,6 +438,15 @@ at = 0x23E86
 call = "ShotSweeps"
 on_true = 0x23EBD
 on_false = 0x23E99
+
+# Bond walks and collides by his 60 fps step on the ground, so he climbs small ledges (src/game/ledges.cpp)
+[[hook]]
+at = 0xAD942
+call = "LedgeStepStart"
+
+[[hook]]
+at = 0xAE427
+call = "LedgeStepEnd"
 
 # argument locations in API order for functions a link time code generated library compiled with another
 # convention: a register (eax ebx ecx edx esi edi ebp) or "stack" for the next stack slot, which the callee pops

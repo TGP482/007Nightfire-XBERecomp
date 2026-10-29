@@ -32,6 +32,8 @@ constexpr uint32_t kControllerYawStep = 0x28;
 // quarter turns, up positive; 0xB7A50 clamps it to -1..1 after the look
 constexpr uint32_t kControllerPitch = 0x838;
 constexpr uint32_t kControllerZoom = 0x860;  // the view's magnification, 1 unzoomed; the stick's look divides by it
+// zero gravity's turn this frame (0xAA6F0), radians, down positive; its yaw is the yaw step
+constexpr uint32_t kControllerPitchStep = 0x24;
 constexpr uint32_t kControllerLooking = 0xF0;  // set while the stick moves the view up or down
 // manual aim's sight on the view, right and up positive, which the sticks move (0xB764E) up to its reach and the
 // sight's pull (0xB9950) eases the drawn one towards
@@ -231,4 +233,19 @@ void GuidedMissileMouse(X86Context& ctx, uint8_t*) {
     G<float>(ctx.esp + kMissileTurnUpDown) += g_missile_dy * kRadiansPerCount;
     g_missile_dx = 0.0f;
     g_missile_dy = 0.0f;
+}
+
+// at 0xAA805 in zero gravity's move (Bond's states 8 and 9, Equinox), the controller in esi: the mouse turns Bond
+// beside the sticks before the turn is applied
+void ZeroGravityMouse(X86Context& ctx, uint8_t*) {
+    constexpr uint32_t kPlayer = 0x94;  // from the stack pointer
+    uint32_t controller = ctx.esi;
+    if (G<int8_t>(controller + kControllerPlayer) != input::KeyboardPlayer()) return;
+    bool aim = Aiming(kernel::R32(ctx.esp + kPlayer), controller);
+    float dx;
+    float dy;
+    if (!input::TakeMouse(dx, dy, aim)) return;
+    float per_count = kRadiansPerCount / std::max(G<float>(controller + kControllerZoom), 1.0f);
+    G<float>(controller + kControllerYawStep) -= dx * per_count;
+    G<float>(controller + kControllerPitchStep) += dy * per_count;
 }
