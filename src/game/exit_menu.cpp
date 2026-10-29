@@ -14,9 +14,11 @@
 #include <windows.h>
 
 #include <cstring>
+#include <string>
 #include <vector>
 
 #include "app/app.h"
+#include "common/translations.h"
 #include "core/log.h"
 #include "game/main_menu.h"
 #include "game/options_menu.h"
@@ -73,13 +75,14 @@ constexpr char kQuitLabel[] = "Quit";
 constexpr char kQuitDescription[] = "Exit the game.";
 constexpr char kQuitQuestion[] = "Are you sure you want to exit?";
 
-// guest memory: a lifted definition, QUIT's definition, then the texts
+// guest memory: a lifted definition, QUIT's definition, then the texts in the game's language
+constexpr uint32_t kTextSize = 128;
 constexpr uint32_t kLiftedAt = 0;
 constexpr uint32_t kQuitDefAt = kDefSize;
 constexpr uint32_t kLabelAt = kDefSize * 2;
-constexpr uint32_t kDescriptionAt = kLabelAt + sizeof(kQuitLabel);
-constexpr uint32_t kQuestionAt = kDescriptionAt + sizeof(kQuitDescription);
-constexpr uint32_t kScratchSize = kQuestionAt + sizeof(kQuitQuestion);
+constexpr uint32_t kDescriptionAt = kLabelAt + kTextSize;
+constexpr uint32_t kQuestionAt = kDescriptionAt + kTextSize;
+constexpr uint32_t kScratchSize = kQuestionAt + kTextSize;
 
 struct Message {
     uint32_t id;
@@ -96,12 +99,17 @@ Codenames g_codenames;
 bool g_asking = false;
 bool g_quitting = false;
 
+void PutText(uint32_t at, const char* english) {
+    std::string text = game::GameText(english).substr(0, kTextSize - 1);
+    std::memcpy(kernel::HostPtr(at), text.c_str(), text.size() + 1);
+}
+
 uint32_t Scratch() {
     static const uint32_t base = [] {
         uint32_t at = mem::AllocSystem(kScratchSize);
-        std::memcpy(kernel::HostPtr(at + kLabelAt), kQuitLabel, sizeof(kQuitLabel));
-        std::memcpy(kernel::HostPtr(at + kDescriptionAt), kQuitDescription, sizeof(kQuitDescription));
-        std::memcpy(kernel::HostPtr(at + kQuestionAt), kQuitQuestion, sizeof(kQuitQuestion));
+        PutText(at + kLabelAt, kQuitLabel);
+        PutText(at + kDescriptionAt, kQuitDescription);
+        PutText(at + kQuestionAt, kQuitQuestion);
         return at;
     }();
     return base;

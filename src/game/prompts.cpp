@@ -6,6 +6,7 @@
 #include <string_view>
 
 #include "common/mouse_keyboard.h"
+#include "common/translations.h"
 #include "core/log.h"
 #include "game/main_menu.h"
 #include "kernel/memory.h"
@@ -137,12 +138,13 @@ bool TitleLine(X86Context& ctx, std::string_view text, std::string& line, int& c
     return true;
 }
 
-// QUIT's legend with B to cancel, or empty
+// QUIT's legend with B to cancel, or empty; the other languages get B and the word
 std::string QuitLegend(std::string_view text, int& count) {
-    bool legend = text.starts_with(kQuitLegend) && text.find("~B") == text.npos;
+    bool legend = text.find("~A") != text.npos && text.find("~B") == text.npos;
     if (!game::QuitAsked() || !legend) return {};
-    if (count >= int(text.size())) count = int(text.size() + sizeof(kQuitCancel) - 1);
-    return std::string(text) + kQuitCancel;
+    std::string cancel = text.starts_with(kQuitLegend) ? kQuitCancel : "  ~B " + game::GameText("Cancel");
+    if (count >= int(text.size())) count = int(text.size() + cancel.size());
+    return std::string(text) + cancel;
 }
 
 void SetText(X86Context& ctx, uint32_t scratch, const Rewritten& keys) {

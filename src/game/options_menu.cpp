@@ -12,6 +12,7 @@
 
 #include "common/menu.h"
 #include "common/recomp_pages.h"
+#include "common/translations.h"
 #include "core/log.h"
 #include "game/options_menu.h"
 #include "kernel/memory.h"
@@ -173,8 +174,9 @@ uint32_t Scratch() {
 }
 
 // the text in guest memory at that scratch slot, cut to what a list cell holds
-uint32_t GuestText(uint32_t slot, const std::string& text) {
+uint32_t GuestText(uint32_t slot, const std::string& english) {
     uint32_t at = Scratch() + slot;
+    std::string text = game::GameText(english);
     size_t length = std::min<size_t>(text.size(), kMaxText - 1);
     std::memcpy(kernel::HostPtr(at), text.data(), length);
     G<char>(at + uint32_t(length)) = 0;
