@@ -16,5 +16,5 @@ X86_EXTERN_FUNC(__imp__sub_000E3140);
 X86_FUNC(sub_000E3140) {
     if (!game::PalDisc()) return __imp__sub_000E3140(ctx, base);
     uint32_t column = kernel::CallGuest(ctx, kLanguageColumn, {});
-    ctx.eax = kernel::R32(kPalFolders + column * 4);
+    kernel::Return(ctx, kernel::R32(kPalFolders + column * 4), 0);
 }
