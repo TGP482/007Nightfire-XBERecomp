@@ -5,8 +5,9 @@
 
 // A decrypting keypad (0xD1550, state 5) steps once a frame: up while a decryptor shot touches it, down 4 while none
 // does. A part the laser cuts (state 0, type 1) does too: worn down while a laser shot touches it, healed once none has
-// for 2 frames. Shots leave at a rate in time, so past 60 fps most frames have none and neither ever gives way. Both
-// step once per 60 fps frame instead, on the first frame a shot touches it, else on the last.
+// for 2 frames. Shots come 60 a second, one a frame on the console, so past 60 fps most frames have none. Each shot
+// steps it as it lands, and a frame without one steps it once per 60 fps frame only after a 60 fps frame with no shot,
+// as the next shot may land a frame late.
 namespace {
 
 using kernel::G;
@@ -38,10 +39,7 @@ struct Shots {
 constexpr Shots kDecryptor = {0x56, 0x57};
 constexpr Shots kLaser = {0x4E, 0x4F};
 
-struct TargetStep {
-    double due = 0.0;      // 60 fps frames not stepped yet
-    bool stepped = false;  // in the current 60 fps frame
-};
+constexpr double kShotGap = 2.0;  // 60 fps frames since the last shot before one counts as none
 
 bool ShotOf(uint32_t object, const Shots& shots) {
     if (!object || G<uint8_t>(object + kKind) != kShot) return false;
@@ -65,16 +63,15 @@ const Shots* StepShots(uint32_t target) {
     return laser_cut ? &kLaser : nullptr;
 }
 
-// true when this frame runs the target's step
-bool UpdateTargetStep(TargetStep& step, bool touched) {
-    bool run = touched && !step.stepped;
-    step.stepped |= run;
-    step.due += G<float>(kStepScale);
-    if (step.due < 1.0) return run;
-    run |= !step.stepped;
-    step.due -= std::floor(step.due);
-    step.stepped = false;
-    return run;
+// true when this frame runs the target's step; idle is 60 fps frames since a shot last touched it
+bool UpdateIdle(double& idle, bool touched) {
+    if (touched) {
+        idle = 0.0;
+        return true;
+    }
+    double before = idle;
+    idle += G<float>(kStepScale);
+    return idle >= kShotGap && std::floor(idle) > std::floor(before);
 }
 
 }  // namespace
@@ -82,14 +79,14 @@ bool UpdateTargetStep(TargetStep& step, bool touched) {
 // a keypad's or a laser cut part's update, cdecl (target)
 X86_EXTERN_FUNC(__imp__sub_000D1550);
 X86_FUNC(sub_000D1550) {
-    static std::unordered_map<uint32_t, TargetStep> steps;
+    static std::unordered_map<uint32_t, double> idle;
     uint32_t target = kernel::R32(ctx.esp + 4);
     const Shots* shots = StepShots(target);
     if (!shots) {
-        steps.erase(target);
+        idle.erase(target);
         return __imp__sub_000D1550(ctx, base);
     }
-    if (!UpdateTargetStep(steps[target], TouchedBy(target, *shots))) {
+    if (!UpdateIdle(idle[target], TouchedBy(target, *shots))) {
         kernel::Return(ctx, 0, 0);
         return;
     }
