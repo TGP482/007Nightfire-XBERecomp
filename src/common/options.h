@@ -63,6 +63,7 @@ bool ControllerPlugged(int slot);  // game_info.cpp
 int KeyboardPort();  // game_info.cpp: the port with the keyboard, -1 for none
 uint32_t LanguageId(uint32_t setting);  // language.cpp: the game's language for the language setting
 uint32_t BootLanguage();                // language.cpp: the game's language as this run started
+bool PalDisc();  // pal_disc.cpp: the Europe disc, whose films are only those for 50 Hz
 inline std::atomic<float> g_fps{0};  // from the host, for the game's own counter
 inline std::atomic<bool> g_hdr_display{false};  // the renderer's: the window's display has Windows HDR on
 inline std::atomic<bool> g_hud_hidden{false};  // the toggle HUD key's, not saved
