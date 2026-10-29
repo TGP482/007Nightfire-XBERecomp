@@ -12,6 +12,7 @@ bool UpdateTicked();    // the running update crossed a console tick
 double FrameTicks();    // console ticks this frame covers
 uint32_t FrameTicksCrossed();
 uint32_t UpdateCount();
+uint32_t TickUpdate();  // the UpdateCount of the update that crossed the last console tick
 double TickCarry();  // of a tick, real time the game clock has not counted yet
 double Between();    // in a cutscene, the share of the next tick the frame is drawn at, else 1
 uint32_t FrameCount();  // of the game loop

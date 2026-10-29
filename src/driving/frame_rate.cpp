@@ -46,6 +46,7 @@ struct Time {
     uint32_t frame_crossed = 0;
     bool update_ticked = false;
     uint32_t updates = 0;
+    uint32_t tick_update = 0;
     uint32_t ticks = 0;  // added to the scheduler, for its half count
     double whole_carry = 0.0;  // of a tick, for cutscenes
     double between = 1.0;      // share of the next tick a cutscene frame is drawn at
@@ -106,6 +107,7 @@ bool UpdateTicked() { return g_time.update_ticked; }
 double FrameTicks() { return g_time.frame_ticks; }
 uint32_t FrameTicksCrossed() { return g_time.frame_crossed; }
 uint32_t UpdateCount() { return g_time.updates; }
+uint32_t TickUpdate() { return g_time.tick_update; }
 double TickCarry() { return g_time.carry; }
 double Between() { return g_time.between; }
 uint32_t FrameCount() { return g_time.frames; }
@@ -176,6 +178,7 @@ X86_FUNC(sub_000B2620) {
         g_time.update_ticked = whole > 0;
         g_time.frame_crossed += whole;
         g_time.updates++;
+        if (whole > 0) g_time.tick_update = g_time.updates;
     }
     kernel::Return(ctx, ctx.eax, 0);
 }

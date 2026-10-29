@@ -1097,6 +1097,32 @@ call = "DrivingPathRate"
 at = 0x7FE61
 call = "DrivingPathRate"
 
+# collision damage lands from one update a tick (src/driving/collision_damage.cpp)
+[[hook]]
+at = 0xAD54C  # world
+call = "DrivingHitAgainEsi"
+on_true = 0xAD5F8
+
+[[hook]]
+at = 0xB0865  # body pair, first body's hits from the player
+call = "DrivingHitAgainEbx"
+on_true = 0xB087D
+
+[[hook]]
+at = 0xB088E  # its damage
+call = "DrivingHitAgainEbx"
+on_true = 0xB08B8
+
+[[hook]]
+at = 0xB08E9  # second body's hits from the player
+call = "DrivingHitAgainEsi"
+on_true = 0xB0901
+
+[[hook]]
+at = 0xB0912  # its damage
+call = "DrivingHitAgainEsi"
+on_true = 0xB093F
+
 # people, rumble, rules and props: steps per tick scale to the update (src/driving/world_steps.cpp)
 [[hook]]
 at = 0x19721  # animation time step
