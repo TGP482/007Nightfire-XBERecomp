@@ -80,8 +80,11 @@ std::string KeyFor(char code) {
 
 bool Legend(std::string_view text) {
     if (text.rfind("Press ~", 0) == 0 || text.find("  ~") != text.npos) return true;
-    bool one_button = text.size() > 3 && text[0] == kGlyph && text[2] == ' ' && text.find(kGlyph, 1) == text.npos;
-    return one_button && !game::PauseMenuUp();
+    size_t buttons = size_t(std::count(text.begin(), text.end(), kGlyph));
+    bool button_first = text.size() > 3 && text[0] == kGlyph && text[2] == ' ';
+    if (button_first && buttons > 1) return true;  // the other languages space their legends once
+    if (game::QuitAsked() && buttons > 0) return true;  // its "Press ~A" in any language
+    return button_first && !game::PauseMenuUp();
 }
 
 struct Rewritten {
