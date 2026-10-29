@@ -14,6 +14,7 @@ using kernel::G;
 
 constexpr uint32_t kPlayerState = 0xD2;  // u16; 8 to 12 and 16 have no look, 0xB7610 leaves them
 constexpr uint16_t kGuiding = 10;        // steering a guided missile, which 0x23670 turns by the sticks
+constexpr uint16_t kHanging = 6;         // on a cable; 0xAFB50 turns Bond round if his yaw is 0.0002 off the cable's
 constexpr uint32_t kPlayerWeapon = 0xB8;
 constexpr uint32_t kWeaponFlags = 0x50;  // bit 0 set by the manual aim button, 0xBA8F0
 constexpr uint8_t kManualAim = 1;
@@ -134,6 +135,7 @@ void MouseLook(uint32_t player, uint32_t controller, bool aim) {
         g_missile_dy += dy;
     }
     if (!Looks(state)) return;
+    if (state == kHanging) dx = 0.0f;
     g_missile_dx = 0.0f;
     g_missile_dy = 0.0f;
     float per_count = kRadiansPerCount / std::max(G<float>(controller + kControllerZoom), 1.0f);
