@@ -2,6 +2,7 @@
 #include <array>
 #include <bit>
 #include <chrono>
+#include <cmath>
 #include <mutex>
 #include <unordered_map>
 
@@ -207,12 +208,11 @@ constexpr uint32_t kProjectOut = 8;
 constexpr uint32_t kProjectView = 0xC;
 constexpr uint32_t kViewWidth = 0xF8;
 
-// out x from the view's left, where the anchor's placement narrows it back to
-void Unnarrow(uint32_t out, uint32_t index, float anchor) {
+// x from the view's left, where the anchor's placement narrows it back to
+void Unnarrow(float& x, uint32_t index, float anchor) {
     uint32_t view = index < kViewCount ? kernel::R32(kViews + index * 4) : 0;
     if (!view) return;
     float width = kernel::G<float>(view + kViewWidth);
-    float& x = kernel::G<float>(out);
     float share = game::NarrowShare();
     x = (x - anchor * width * (1 - share)) / share;
 }
@@ -230,7 +230,24 @@ X86_FUNC(sub_000DB230) {
     uint32_t out = kernel::R32(ctx.esp + kProjectOut);
     uint32_t index = kernel::G<uint16_t>(ctx.esp + kProjectView);
     __imp__sub_000DB230(ctx, base);
-    if (g_marker_anchor != kAuto && game::Wide() && out) Unnarrow(out, index, g_marker_anchor);
+    if (g_marker_anchor != kAuto && game::Wide() && out) Unnarrow(kernel::G<float>(out), index, g_marker_anchor);
+}
+
+// manual aim's sight (eax the controller, esi its item): 0xB4B60 places it by the shown sight on the view's width,
+// where the shot goes, so it moves out as far as its centered placement brings it in
+constexpr uint32_t kControllerPlayer = 0x8DE;
+constexpr uint32_t kItemX = 0x24;  // short, view pixels
+
+X86_EXTERN_FUNC(__imp__sub_000B4B60);
+X86_FUNC(sub_000B4B60) {
+    uint32_t controller = ctx.eax;
+    uint32_t item = ctx.esi;
+    __imp__sub_000B4B60(ctx, base);
+    if (!item || !game::Wide()) return;
+    int16_t& item_x = kernel::G<int16_t>(item + kItemX);
+    float x = item_x;
+    Unnarrow(x, kernel::G<int8_t>(controller + kControllerPlayer), kCenter);
+    item_x = int16_t(std::lround(x));
 }
 
 // the HUD's panels that place world markers, cdecl (player, slot, descriptor)
