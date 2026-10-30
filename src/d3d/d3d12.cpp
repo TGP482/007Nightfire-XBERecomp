@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -1140,6 +1141,7 @@ private:
     uint32_t ao_h_ = 0;
     bool characters_ = false;  // draws between the game's character marks
     bool wide_box_ = false;    // draws between the game's 16:9 box marks
+    float wide_box_side_ = kBoxMiddle;
     // HDR10 output: the window's display, the output asked and in use, the frame and panel targets it draws first
     HMONITOR hdr_mon_ = nullptr;
     bool hdr_display_ = false;
@@ -3146,11 +3148,11 @@ void D3D12Backend::SetTextureViewsAndSamplers(const State& s, const Assembled& a
     binds_.samplers = samplers;
 }
 
-// the viewport and the scissor's corners into the largest 16:9 box in the middle of the target
-void FitWideBox(D3D12_VIEWPORT& vp, LONG& x0, LONG& y0, LONG& x1, LONG& y1) {
+// the viewport and the scissor's corners into the largest 16:9 box of the target, at side of its spare width
+void FitWideBox(D3D12_VIEWPORT& vp, LONG& x0, LONG& y0, LONG& x1, LONG& y1, float side) {
     float kx = game::WideBoxWidth();
     float ky = game::WideBoxHeight();
-    vp.TopLeftX = vp.Width * (1 - kx) / 2;
+    vp.TopLeftX = vp.Width * (1 - kx) * side;
     vp.TopLeftY = vp.Height * (1 - ky) / 2;
     vp.Width *= kx;
     vp.Height *= ky;
@@ -3178,7 +3180,7 @@ void D3D12Backend::SetViewportScissor(const State& s, uint32_t gw) {
     }
     const Target* bound = bound_rt_ ? bound_rt_ : bound_ds_;
     bool screen = bound->gw == guest_w_ && bound->gh == guest_h_;
-    if (wide_box_ && screen) FitWideBox(vp, x0, y0, x1, y1);
+    if (wide_box_ && screen) FitWideBox(vp, x0, y0, x1, y1, wide_box_side_);
     D3D12_RECT rect{std::clamp<LONG>(x0, 0, LONG(W)), std::clamp<LONG>(y0, 0, LONG(H)),
                     std::clamp<LONG>(x1, 0, LONG(W)), std::clamp<LONG>(y1, 0, LONG(H))};
     bool same = binds_.rasterizer && !std::memcmp(&vp, &binds_.viewport, sizeof(vp)) &&
@@ -3463,6 +3465,7 @@ void D3D12Backend::Clear(const State& s, uint32_t count, const uint8_t* rects, u
     }
     if (flags == kClearWideBox) {
         wide_box_ = stencil != 0;
+        wide_box_side_ = std::bit_cast<float>(color);
         return;
     }
     PerfScope perf_clear{g_perf.clear};

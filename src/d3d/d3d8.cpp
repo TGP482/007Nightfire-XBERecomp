@@ -2,6 +2,7 @@
 // Resource creation, locking and the XG helpers stay recompiled: they only manage memory.
 #include <algorithm>
 #include <atomic>
+#include <bit>
 #include <chrono>
 #include <map>
 #include <thread>
@@ -344,9 +345,10 @@ void MarkCharacters(bool on) {
     if (g_backend) g_backend->Clear(g_state, 0, nullptr, gpu::kClearCharacters, 0, 0, on ? 1 : 0);
 }
 
-void BoxToWide(bool on) {
+void BoxToWide(bool on, float side) {
     std::lock_guard<std::recursive_mutex> lock(g_lock);
-    if (g_backend) g_backend->Clear(g_state, 0, nullptr, gpu::kClearWideBox, 0, 0, on ? 1 : 0);
+    uint32_t colour = std::bit_cast<uint32_t>(side);
+    if (g_backend) g_backend->Clear(g_state, 0, nullptr, gpu::kClearWideBox, colour, 0, on ? 1 : 0);
 }
 
 }  // namespace d3d
