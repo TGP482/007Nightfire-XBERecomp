@@ -12,6 +12,7 @@ The latest version of [007Nightfire-XBERecomp](https://github.com/TGP482/007Nigh
 - Place your game files in the `assets` folder. This can be an ISO, or the extracted data files. The USA and Europe releases are supported.
 - Run `nightfire.exe`. The first start compiles the game's code for your PC, this only happens once.
 - Recomp Settings can be adjusted in the in-game options menu while the game is running, or through the Settings overlay, which is opened with <kbd>F10</kbd> by default.
+<img width="1920" height="1080" alt="{2E9B3714-033E-4572-A951-EBC7EEA5EE87}" src="https://github.com/user-attachments/assets/820f864a-ac8d-4ab6-a5d6-f497eeb799a5" />
 
 ## Features
 ### Display
