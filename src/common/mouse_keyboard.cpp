@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <iterator>
@@ -606,6 +607,17 @@ const Action* Actions(size_t* count) {
 std::string Binding(size_t action) {
     std::lock_guard lock(g_bind_lock);
     return action < kCount ? Join(g_binds[action], true) : std::string();
+}
+
+std::string FirstKey(std::string_view id) {
+    for (size_t i = 0; i < kCount; i++) {
+        if (kActions[i].action.id != id) continue;
+        std::string keys = Binding(i);
+        std::string key = keys.substr(0, keys.find(','));
+        for (char& c : key) c = char(std::toupper(uint8_t(c)));
+        return key == "ESCAPE" ? "ESC" : key;
+    }
+    return {};
 }
 
 void Bind(size_t action, int vk, int slot) {

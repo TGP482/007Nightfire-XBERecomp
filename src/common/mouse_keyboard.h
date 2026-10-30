@@ -56,6 +56,8 @@ struct Action {
 };
 const Action* Actions(size_t* count);
 std::string Binding(size_t action);
+// the first key bound to the action in upper case as legends name it, empty when none
+std::string FirstKey(std::string_view id);
 // slot 0 the key, 1 its alternate (the F10 panel's second box); vk 0 clears the slot. A key the other slot has moves.
 void Bind(size_t action, int vk, int slot = 0);
 void ResetBindings();

@@ -1,7 +1,7 @@
 #include <array>
-#include <bit>
 #include <cmath>
 
+#include "common/guest_call.h"
 #include "common/options.h"
 #include "d3d/occlusion.h"
 #include "kernel/memory.h"
@@ -12,6 +12,7 @@
 // for one of its bones (the shells, the tracers) it gets the bone where that projection shows it.
 namespace {
 
+using game::Bits;
 using kernel::G;
 using kernel::R32;
 
@@ -72,8 +73,6 @@ struct ViewFov {
 };
 std::array<ViewFov, kPlayers> g_views;
 bool g_drawing = false;  // a first person model draws with its own projection
-
-uint32_t Bits(float value) { return std::bit_cast<uint32_t>(value); }
 
 // the game's vertical angle widened as the setting's 4:3 horizontal one is from the game's
 float Widen(float angle, uint32_t fov) {

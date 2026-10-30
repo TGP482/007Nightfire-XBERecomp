@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <cctype>
 #include <cstring>
 #include <string>
 #include <string_view>
@@ -39,28 +38,11 @@ constexpr float kBlankWidth = -18.0f;
 constexpr uint32_t kLabelSize = 64;
 constexpr uint32_t kSlotSize = kPictureSize + kLabelSize;
 
-std::string Upper(std::string name) {
-    for (char& c : name) c = char(std::toupper(uint8_t(c)));
-    return name == "ESCAPE" ? "ESC" : name;
-}
-
-// the first key bound to the action, as the F10 panel names it
-std::string Bound(std::string_view id) {
-    size_t count = 0;
-    const input::Action* actions = input::Actions(&count);
-    for (size_t i = 0; i < count; i++) {
-        if (actions[i].id != id) continue;
-        std::string keys = input::Binding(i);
-        return Upper(keys.substr(0, keys.find(',')));
-    }
-    return {};
-}
-
 // the key doing a picture's button in the menus (src/driving/keyboard.cpp, FrontEnd.def); empty keeps the picture
 std::string KeyFor(uint32_t menu, uint32_t picture) {
     if (picture == R32(menu + kSelectPicture)) return "ENTER";
     if (picture == R32(menu + kBackPicture)) return "BACKSPACE";
-    if (picture == R32(menu + kContinuePicture)) return Bound("car_pause");
+    if (picture == R32(menu + kContinuePicture)) return input::FirstKey("car_pause");
     if (picture == R32(menu + kChangePagePicture)) return "LEFT/RIGHT";
     if (picture == R32(menu + kScrollPicture)) return "UP/DOWN";
     return {};
@@ -128,7 +110,7 @@ X86_FUNC(sub_000DA1D0) {
     g_line_keys = false;
     __imp__sub_000DA1D0(ctx, base);
     if (!input::KeyboardActive() || ctx.eax >= kButtons) return;
-    std::string key = Bound(kButtonActions[ctx.eax]);
+    std::string key = input::FirstKey(kButtonActions[ctx.eax]);
     if (key.empty()) return;
     std::string line = GuestText(before) + "(" + key + ")" + GuestText(after);
     size_t length = std::min<size_t>(line.size(), kBeforeSize - 1);

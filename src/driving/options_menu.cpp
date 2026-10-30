@@ -5,14 +5,13 @@
 // shown. Up and down move in the list, A opens, binds or steps a row, B goes back, left and right change a value.
 #include <algorithm>
 #include <atomic>
-#include <bit>
 #include <chrono>
 #include <cstring>
-#include <initializer_list>
 #include <string>
 #include <vector>
 
 #include "common/aspect.h"
+#include "common/guest_call.h"
 #include "common/menu.h"
 #include "common/mouse_keyboard.h"
 #include "common/recomp_pages.h"
@@ -24,6 +23,8 @@
 
 namespace {
 
+using game::Bits;
+using game::CallThis;
 using kernel::G;
 using kernel::R32;
 using Level = app::RecompPages::Level;
@@ -165,16 +166,6 @@ uint32_t DrawnText(uint32_t slot, const std::string& english) {
         if (c == '%') text += '%';
     }
     return WriteGuest(slot, text);
-}
-
-uint32_t Bits(float value) { return std::bit_cast<uint32_t>(value); }
-
-uint32_t CallThis(X86Context& ctx, uint32_t fn, uint32_t self, std::initializer_list<uint32_t> args) {
-    uint32_t ecx = ctx.ecx;
-    ctx.ecx = self;
-    uint32_t result = kernel::CallGuest(ctx, fn, args);
-    ctx.ecx = ecx;
-    return result;
 }
 
 bool TabsShown(uint32_t menu) { return !G<uint8_t>(menu + kHidesTabs) && R32(menu + kMode) != kTablessMode; }

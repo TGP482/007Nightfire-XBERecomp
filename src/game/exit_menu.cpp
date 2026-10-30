@@ -62,7 +62,6 @@ constexpr uint32_t kDescriptionBox = 0x25FC18;
 constexpr uint32_t kAsk = 0x75FB0;
 constexpr uint32_t kTakeAnswer = 0x761A0;  // (value out or 0): the answer once, 0 while none
 constexpr uint32_t kAnswerYes = 3;
-constexpr uint32_t kAnswerNo = 4;
 
 // widget definition, as 0x70D40 reads it
 constexpr uint32_t kDefSize = 0x24;

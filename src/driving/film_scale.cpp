@@ -1,7 +1,5 @@
-#include <bit>
-#include <initializer_list>
-
 #include "common/aspect.h"
+#include "common/guest_call.h"
 #include "common/options.h"
 #include "xdk/hle.h"
 
@@ -12,6 +10,7 @@
 // reuses the x scale's slot, so the scale is kept beforehand.
 namespace {
 
+using game::Bits;
 using kernel::G;
 using kernel::R32;
 
@@ -34,13 +33,8 @@ struct FilmScale {
 
 FilmScale g_scale;
 
-uint32_t Bits(float value) { return std::bit_cast<uint32_t>(value); }
-
 void CallPlayer(X86Context& ctx, uint32_t player, uint32_t slot, std::initializer_list<uint32_t> args) {
-    uint32_t ecx = ctx.ecx;
-    ctx.ecx = player;
-    kernel::CallGuest(ctx, R32(R32(player) + slot), args);
-    ctx.ecx = ecx;
+    game::CallThis(ctx, R32(R32(player) + slot), player, args);
 }
 
 }  // namespace

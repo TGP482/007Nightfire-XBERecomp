@@ -38,23 +38,6 @@ constexpr char kStartButton[] = "~A";  // the page's full screen text 0x10000196
 constexpr char kQuitLegend[] = "Press ~A";
 constexpr char kQuitCancel[] = " or ~B to cancel";
 
-std::string Upper(std::string name) {
-    for (char& c : name) c = char(std::toupper(uint8_t(c)));
-    return name == "ESCAPE" ? "ESC" : name;
-}
-
-// the first key bound to the action, as the F10 panel names it; empty when none
-std::string Bound(std::string_view id) {
-    size_t count = 0;
-    const input::Action* actions = input::Actions(&count);
-    for (size_t i = 0; i < count; i++) {
-        if (actions[i].id != id) continue;
-        std::string keys = input::Binding(i);
-        return Upper(keys.substr(0, keys.find(',')));
-    }
-    return {};
-}
-
 // the key doing a button's work in the menus (src/common/mouse_keyboard.cpp); empty keeps the button
 std::string KeyFor(char code) {
     switch (code) {
@@ -69,11 +52,11 @@ std::string KeyFor(char code) {
         case 'W':
             return "ARROWS";
         case 'X':
-            return Bound("menu_x");
+            return input::FirstKey("menu_x");
         case 'Y':
-            return Bound("menu_y");
+            return input::FirstKey("menu_y");
         case 'S':
-            return Bound("pause");
+            return input::FirstKey("pause");
         default:
             return {};
     }

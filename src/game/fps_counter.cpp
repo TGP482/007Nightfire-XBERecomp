@@ -1,8 +1,8 @@
-#include <bit>
 #include <cstdio>
 
 #include "app/app.h"
 #include "common/aspect.h"
+#include "common/guest_call.h"
 #include "common/options.h"
 #include "core/log.h"
 #include "game/main_menu.h"
@@ -13,6 +13,7 @@
 // text items are (0xD9410), just before the game presents the frame.
 namespace {
 
+using game::Bits;
 using kernel::G;
 
 constexpr uint32_t kFrameOpen = 0x2C5754;  // byte: a frame 0xE43A0 presents
@@ -59,8 +60,6 @@ constexpr uint32_t kAlignCentered = 3;
 constexpr uint32_t kScaleAt = 4;
 constexpr uint32_t kTextAt = 12;
 constexpr uint32_t kScratchSize = 64;
-
-uint32_t Bits(float value) { return std::bit_cast<uint32_t>(value); }
 
 float Wide() { return game::NarrowShare(); }  // a 4:3 glyph on the frame
 

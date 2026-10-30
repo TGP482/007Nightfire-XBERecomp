@@ -1,9 +1,8 @@
-#include <bit>
 #include <cstdio>
 #include <cstring>
-#include <initializer_list>
 
 #include "common/aspect.h"
+#include "common/guest_call.h"
 #include "common/options.h"
 #include "d3d/wide_box.h"
 #include "kernel/memory.h"
@@ -15,6 +14,8 @@
 // is placed so it lands where default.xbe's and SCDA's do, at the frame's corner, out of the HUD's 16:9 box.
 namespace {
 
+using game::Bits;
+using game::CallThis;
 using kernel::G;
 using kernel::R32;
 
@@ -54,15 +55,6 @@ constexpr float kMargin = 8;
 constexpr float kShadow = 1;
 constexpr uint32_t kScratchSize = 32;
 
-uint32_t Bits(float value) { return std::bit_cast<uint32_t>(value); }
-
-void CallRenderer(X86Context& ctx, uint32_t fn, uint32_t renderer, std::initializer_list<uint32_t> args) {
-    uint32_t ecx = ctx.ecx;
-    ctx.ecx = renderer;
-    kernel::CallGuest(ctx, fn, args);
-    ctx.ecx = ecx;
-}
-
 uint32_t FpsText() {
     static const uint32_t scratch = mem::AllocSystem(kScratchSize);
     char line[kScratchSize];
@@ -96,9 +88,9 @@ Point Request(const Frame& frame, float x, float y) {
 
 // the scale again each time: 0xD6520 leaves it scaled for the frame
 void DrawAt(X86Context& ctx, uint32_t renderer, float across, float scale, uint32_t colour, Point at) {
-    CallRenderer(ctx, kSetScale, renderer, {Bits(across), Bits(scale)});
+    CallThis(ctx, kSetScale, renderer, {Bits(across), Bits(scale)});
     kernel::W32(renderer + kRendererColour, colour);
-    CallRenderer(ctx, kDrawText, renderer, {FpsText(), Bits(at.x), Bits(at.y)});
+    CallThis(ctx, kDrawText, renderer, {FpsText(), Bits(at.x), Bits(at.y)});
 }
 
 uint32_t Colour(X86Context& ctx, uint32_t argb) { return kernel::CallGuest(ctx, kConvertColour, {argb}); }
@@ -109,7 +101,7 @@ uint32_t Colour(X86Context& ctx, uint32_t argb) { return kernel::CallGuest(ctx, 
 void DrivingFpsCounter(X86Context& ctx, uint8_t*) {
     uint32_t renderer = R32(ctx.esi + kRenderer);
     if (!game::Opt().fps_counter || !renderer) return;
-    CallRenderer(ctx, kSetFont, renderer, {R32(ctx.esi + kFontLine)});
+    CallThis(ctx, kSetFont, renderer, {R32(ctx.esi + kFontLine)});
     uint32_t font = R32(renderer + kRendererFont);
     if (!font) return;
     float ascent = G<uint8_t>(font + kFontAscent);
@@ -124,6 +116,6 @@ void DrivingFpsCounter(X86Context& ctx, uint8_t*) {
     float across = frame.wide ? asked * share / kNarrow : asked;  // 0xD6520 narrows the glyphs to a 16:9 frame's 4:3
     DrawAt(ctx, renderer, across, asked, Colour(ctx, kBlack), Request(frame, left + kShadow, top + kShadow));
     DrawAt(ctx, renderer, across, asked, Colour(ctx, kWhite), Request(frame, left, top));
-    CallRenderer(ctx, kFlush, renderer, {});
+    CallThis(ctx, kFlush, renderer);
     if (frame.wide) d3d::BoxToWide(true);
 }
