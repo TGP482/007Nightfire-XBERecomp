@@ -23,7 +23,7 @@ namespace {
 
 constexpr uint32_t kViews = 0x1F661C;  // one per player, then the other cameras
 constexpr uint32_t kViewCount = 11;
-constexpr uint32_t kPlayers = 4;
+constexpr uint32_t kPlayerViews = 5;  // the players, then the cutscene camera (4), which draws the subtitles
 constexpr uint32_t kHudView = 5;   // the view id the HUD panels' items carry
 constexpr uint32_t kMenuView = 7;  // the menus' items, built by 0x72D10
 constexpr uint32_t kLoadingView = 10;  // the loading screen's picture and hint (0xBF9F0)
@@ -322,7 +322,7 @@ X86_FUNC(sub_000D9410) {
         kernel::Return(ctx, 0, 0);
         return;
     }
-    bool narrowed = index < kPlayers || index == kHudView || index == kMenuView || index == kLoadingView;
+    bool narrowed = index < kPlayerViews || index == kHudView || index == kMenuView || index == kLoadingView;
     uint32_t first = args[kArgFirst];
     uint32_t end = args[kArgEnd];
     if (!narrowed || !game::Wide() || first >= end) return __imp__sub_000D9410(ctx, base);

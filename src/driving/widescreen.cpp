@@ -17,6 +17,15 @@ constexpr uint32_t kDisplayWide = 0x4C;  // byte
 constexpr uint32_t kNarrowMode = 0;
 constexpr uint32_t kWideMode = 2;
 constexpr uint32_t kWideViewAspect = 0x19245C;  // 16/9, read only on a widescreen output
+// text draw (0x1073A0), cdecl (font, x, y, text); the font's x scale
+constexpr uint32_t kDrawFont = 4;
+constexpr uint32_t kDrawX = 8;
+constexpr uint32_t kFontScaleX = 0x38;
+// 0xD6520 squeezes the menu's text to the middle 4:3 of a 16:9 frame as these
+constexpr float kNarrow = 0.75f;
+constexpr float kMiddle = 320;
+
+bool g_subtitle = false;  // the subtitle box's text draws
 
 }  // namespace
 
@@ -37,4 +46,22 @@ X86_FUNC(sub_000E1CE0) {
     if (box) d3d::BoxToWide(true);
     __imp__sub_000E1CE0(ctx, base);
     if (box) d3d::BoxToWide(false);
+}
+
+// the subtitle box's draw (0xE3670) skips that squeeze, so its text would stretch in the HUD's 16:9 frame
+X86_EXTERN_FUNC(__imp__sub_000E3670);
+X86_FUNC(sub_000E3670) {
+    g_subtitle = true;
+    __imp__sub_000E3670(ctx, base);
+    g_subtitle = false;
+}
+
+X86_EXTERN_FUNC(__imp__sub_001073A0);
+X86_FUNC(sub_001073A0) {
+    if (g_subtitle && game::Wide()) {
+        float& x = G<float>(ctx.esp + kDrawX);
+        G<float>(R32(ctx.esp + kDrawFont) + kFontScaleX) *= kNarrow;
+        x = kMiddle + (x - kMiddle) * kNarrow;
+    }
+    __imp__sub_001073A0(ctx, base);
 }
