@@ -49,6 +49,11 @@ constexpr uint32_t kUnused = 0xFFFFFFFF;  // as 0xD9410 passes it
 // the watermark ends this far in from the frame's right edge, as on the other recomps
 constexpr char kWatermark[] = "XBE Recomp V1";
 constexpr float kWatermarkRight = 80;
+constexpr float kLegendGap = 8;  // the least room between the legend's text and the watermark
+constexpr float kLowerLine = 16;  // where the legend leaves no room, the watermark goes a line below it
+constexpr uint32_t kStyleAlign = 0x6AA10;  // (style): 1 left, 2 right, 3 centered
+constexpr uint32_t kAlignRight = 2;
+constexpr uint32_t kAlignCentered = 3;
 
 // guest memory 0x6A340 reads: the style, the scale pair, the text
 constexpr uint32_t kScaleAt = 4;
@@ -121,14 +126,39 @@ void DrawFps(X86Context& ctx, uint32_t scratch) {
     Text(ctx, scratch, length, {kMargin * Wide(), kMargin + kFpsSize, kWhite, kBlack, kDropShadow});
 }
 
+// where the legend's text ends on the frame, 0 when it has no label to measure; uses the scratch's scale pair
+float LegendEnd(X86Context& ctx, uint32_t scratch, const game::LegendRow& legend) {
+    if (!legend.text || !legend.style) return 0;
+    uint32_t length = 0;
+    while (G<char>(legend.text + length)) length++;
+    uint32_t scale = scratch + kScaleAt;
+    G<float>(scale) = 1.0f;
+    G<float>(scale + 4) = 1.0f;
+    uint32_t size = kernel::CallGuest(ctx, kText,
+                                      {Bits(0), Bits(0), kGrey, kGrey, kUnused, legend.text, legend.style, scale,
+                                       kMeasureOnly, length, Bits(0)});
+    if (!size) return 0;
+    float width = G<float>(size);
+    uint32_t align = kernel::CallGuest(ctx, kStyleAlign, {legend.style});
+    float end = legend.box_left + width;
+    if (align == kAlignRight) end = legend.box_left + legend.box_width;
+    if (align == kAlignCentered) end = legend.box_left + (legend.box_width + width) / 2;
+    return kFrameWidth * (1 - Wide()) / 2 + end * Wide();
+}
+
 // right aligned on the legend's row, grey without a shadow; it moves with the page
 void DrawWatermark(X86Context& ctx, uint32_t scratch, const game::LegendRow& legend) {
+    float legend_end = LegendEnd(ctx, scratch, legend);
     uint32_t length = Stage(scratch, kTextStyle, kWatermark);
     float right = kFrameWidth - kWatermarkRight * Wide() + legend.left * Wide();
     float baseline = legend.top + (legend.height + kLineHeight) / 2;
     float width = Text(ctx, scratch, length, {0, 0, kGrey, kGrey, kMeasureOnly}).width;
+    if (right - width < legend_end + kLegendGap) baseline += kLowerLine;
     static bool logged = false;
-    if (!logged) LOGR("watermark: x %.1f baseline %.1f width %.1f", double(right - width), double(baseline), double(width));
+    if (!logged) {
+        LOGR("watermark: x %.1f baseline %.1f width %.1f legend end %.1f", double(right - width), double(baseline),
+             double(width), double(legend_end));
+    }
     logged = true;
     Text(ctx, scratch, length, {right - width, baseline, kGrey, kGrey, 0});
 }

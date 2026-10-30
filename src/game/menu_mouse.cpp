@@ -93,6 +93,9 @@ constexpr int kMaxWidgets = 256;
 constexpr uint32_t kMainMenuId = 0x40000002;
 constexpr uint32_t kTitleId = 0x40000009;
 constexpr uint32_t kLegendId = 0x10000001;
+// a text widget's label string and its style string, which holds the alignment
+constexpr uint32_t kLabelText = 0xF4;
+constexpr uint32_t kLabelStyle = 0xC0;
 // the pause page's tabs by sub, RECOMP's last (options_menu.cpp)
 constexpr uint32_t kPauseId = 0x4000004B;
 constexpr uint32_t kPauseWidgets = 0x10000028;
@@ -375,11 +378,23 @@ game::LegendRow game::TakeMainMenuLegend() {
         if (TypeOf(w) != kText || R32(w + kId) != kLegendId) continue;
         Rect p = RectOf(page);
         Rect r = RectOf(w);
-        game::LegendRow row = {true, float(p.x), ViewTop() + float(p.y + r.y), float(r.h)};
+        game::LegendRow row;
+        row.shown = true;
+        row.left = float(p.x);
+        row.top = ViewTop() + float(p.y + r.y);
+        row.height = float(r.h);
+        row.text = R32(w + kLabelText);
+        row.style = R32(w + kLabelStyle);
+        row.box_left = float(p.x + r.x);
+        row.box_width = float(r.w);
         if (R32(page + kId) == kMainMenuId) g_main_menu_row = row;
         return row;
     }
-    if (R32(page + kId) == kTitleId) return g_main_menu_row;
+    if (R32(page + kId) == kTitleId) {
+        game::LegendRow row = g_main_menu_row;
+        row.text = 0;
+        return row;
+    }
     static bool logged = false;
     if (!logged) LOGR("watermark: no button legend on the main menu page %08X", page);
     logged = true;
