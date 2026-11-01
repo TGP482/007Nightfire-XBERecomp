@@ -312,6 +312,11 @@ on_true = 0xAA4A9
 at = 0x23838
 call = "GuidedMissileMouse"
 
+# the mouse steers a mini helicopter (src/game/mouse.cpp)
+[[hook]]
+at = 0x27601
+call = "CopterMouse"
+
 # the mouse turns Bond in zero gravity (src/game/mouse.cpp)
 [[hook]]
 at = 0xAA805

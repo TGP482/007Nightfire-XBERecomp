@@ -13,7 +13,6 @@ namespace {
 using kernel::G;
 
 constexpr uint32_t kPlayerState = 0xD2;  // u16; 8 to 12 and 16 have no look, 0xB7610 leaves them
-constexpr uint16_t kGuiding = 10;        // steering a guided missile, which 0x23670 turns by the sticks
 constexpr uint16_t kHanging = 6;         // on a cable; 0xAFB50 turns Bond round if his yaw is 0.0002 off the cable's
 constexpr uint32_t kPlayerWeapon = 0xB8;
 constexpr uint32_t kWeaponFlags = 0x50;  // bit 0 set by the manual aim button, 0xBA8F0
@@ -59,6 +58,12 @@ constexpr uint32_t kMissileOwner = 0x24;
 constexpr uint32_t kMissileTurnAcross = 0x3C;
 constexpr uint32_t kMissileTurnUpDown = 0x38;
 
+// a mini helicopter's flight (0x26F50, the helicopter in edi): its pilot and, at 0x27601 from the stack pointer, its
+// turn this frame as the missile's
+constexpr uint32_t kCopterPilot = 0xD2;  // s16
+constexpr uint32_t kCopterTurnAcross = 0x34;
+constexpr uint32_t kCopterTurnUpDown = 0x30;
+
 // a mounted turret (kind 0x47, 0x27FC0): the controller's +0x808 while the player uses it, and its aim in radians,
 // right lower and down higher, as its sticks move it
 constexpr uint32_t kControllerMounted = 0x808;
@@ -71,9 +76,9 @@ constexpr uint32_t kObjectData = 0xBC;
 constexpr uint32_t kTurretPitch = 0x5C;
 constexpr uint32_t kTurretYaw = 0x60;
 
-// mouse counts the player's look took while steering a missile, for its turn
-float g_missile_dx = 0.0f;
-float g_missile_dy = 0.0f;
+// mouse counts the player's look took while it had no look, for what the player steers
+float g_steer_dx = 0.0f;
+float g_steer_dy = 0.0f;
 
 bool Looks(uint16_t state) { return state < 8 || (state > 12 && state != 16); }
 
@@ -132,14 +137,14 @@ void MouseLook(uint32_t player, uint32_t controller, bool aim) {
     float dy;
     if (!input::TakeMouse(dx, dy, aim)) return;
     uint16_t state = G<uint16_t>(player + kPlayerState);
-    if (state == kGuiding) {
-        g_missile_dx += dx;
-        g_missile_dy += dy;
+    if (!Looks(state)) {
+        g_steer_dx += dx;
+        g_steer_dy += dy;
+        return;
     }
-    if (!Looks(state)) return;
     if (state == kHanging) dx = 0.0f;
-    g_missile_dx = 0.0f;
-    g_missile_dy = 0.0f;
+    g_steer_dx = 0.0f;
+    g_steer_dy = 0.0f;
     float per_count = kRadiansPerCount / std::max(G<float>(controller + kControllerZoom), 1.0f);
     if (SightMoves(player)) {
         MoveSight(controller, dx * per_count, -dy * per_count);
@@ -164,6 +169,20 @@ void GyroLook(uint32_t player, uint32_t controller) {
     G<float>(controller + kControllerYawStep) += yaw * per_degree;
     pitch -= turn.pitch * per_degree * kQuarterTurnsPerRadian;
     if (turn.pitch != 0.0f) G<uint8_t>(controller + kControllerLooking) = 1;
+}
+
+// the mouse turns what the player steers beside the sticks, across right positive and up and down up negative
+void Steer(float& across, float& up_down) {
+    float dx;
+    float dy;
+    if (input::TakeMouse(dx, dy)) {
+        g_steer_dx += dx;
+        g_steer_dy += dy;
+    }
+    across += g_steer_dx * kRadiansPerCount;
+    up_down += g_steer_dy * kRadiansPerCount;
+    g_steer_dx = 0.0f;
+    g_steer_dy = 0.0f;
 }
 
 }  // namespace
@@ -223,16 +242,13 @@ void GuidedMissileMouse(X86Context& ctx, uint8_t*) {
     uint32_t owner = kernel::R32(kernel::R32(ctx.edi + kMissileData) + kMissileOwner);
     uint32_t controller = kernel::R32(owner + kPlayerController);
     if (G<int8_t>(controller + kControllerPlayer) != input::KeyboardPlayer()) return;
-    float dx;
-    float dy;
-    if (input::TakeMouse(dx, dy)) {
-        g_missile_dx += dx;
-        g_missile_dy += dy;
-    }
-    G<float>(ctx.esp + kMissileTurnAcross) += g_missile_dx * kRadiansPerCount;
-    G<float>(ctx.esp + kMissileTurnUpDown) += g_missile_dy * kRadiansPerCount;
-    g_missile_dx = 0.0f;
-    g_missile_dy = 0.0f;
+    Steer(G<float>(ctx.esp + kMissileTurnAcross), G<float>(ctx.esp + kMissileTurnUpDown));
+}
+
+// at 0x27601 in a mini helicopter's flight while a player flies it
+void CopterMouse(X86Context& ctx, uint8_t*) {
+    if (G<int16_t>(ctx.edi + kCopterPilot) != input::KeyboardPlayer()) return;
+    Steer(G<float>(ctx.esp + kCopterTurnAcross), G<float>(ctx.esp + kCopterTurnUpDown));
 }
 
 // at 0xAA805 in zero gravity's move (Bond's states 8 and 9, Equinox), the controller in esi: the mouse turns Bond
