@@ -437,6 +437,12 @@ at = 0x22965
 call = "BombLaserDamage"
 on_true = 0x2298F
 
+# a stunner hit steps a character's stun count by its 60 fps step (src/game/stun_count.cpp)
+[[hook]]
+at = 0x3E78E
+call = "StunCount"
+on_true = 0x3E79D
+
 # a laser or stunner shot shows for a 60 fps frame (src/game/beams.cpp)
 [[hook]]
 at = 0x2372B
@@ -464,10 +470,6 @@ at = 0x23E86
 call = "ShotSweeps"
 on_true = 0x23EBD
 on_false = 0x23E99
-
-[[hook]]
-at = 0x23EB8
-call = "ShotSphereFrom"
 
 [[hook]]
 at = 0x23F32
