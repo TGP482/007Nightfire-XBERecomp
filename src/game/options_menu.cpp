@@ -151,7 +151,6 @@ using Pressed = app::RecompPages::Pressed;
 
 struct Tab {
     uint32_t page = 0;  // the pause page, as last opened
-    uint32_t stock_nav = 0;
     // where the stock tabs' labels start and end, as the page first opened
     float strip_left = 0.0f;
     float strip_right = 0.0f;
@@ -269,9 +268,11 @@ void LayOutTabs(X86Context& ctx, uint32_t player, bool latch) {
     float gap = (g_tab.strip_right - g_tab.strip_left - labels) / float(tabs.size() - 1);
     float x = g_tab.strip_left;
     for (const TabLabel& t : tabs) {
-        G<int16_t>(t.tab + kRect) = int16_t(std::lround(x));
-        G<int16_t>(t.tab + kRect + 4) = int16_t(std::lround(t.width + gap));
+        int16_t left = int16_t(std::lround(x));
         x += t.width + gap;
+        // a pixel short of the next: 0x734D0 moves left only onto a tab ending before the one it leaves
+        G<int16_t>(t.tab + kRect) = left;
+        G<int16_t>(t.tab + kRect + 4) = int16_t(std::lround(x) - left - 1);
     }
     static bool logged = false;
     if (logged) return;
@@ -330,13 +331,12 @@ std::string Legend(const Row* selected) {
 
 // Showing the page.
 
-// up and down stay in the list, else they move the cursor off the tab; on the rows left and right change a value
-// instead of moving to the next tab
+// up and down stay with the tab's list, else they moved the cursor off the row; on RECOMP's rows left and right
+// change a value instead of moving to the next tab
 void ApplyNav() {
     if (!g_tab.page) return;
-    uint32_t nav = g_tab.stock_nav;
-    if (g_tab.shown) nav = g_tab.pages.level() == Level::Rows ? kNoNav : kSidewaysNav;
-    kernel::W32(g_tab.page + kPageNav, nav);
+    bool rows = g_tab.shown && g_tab.pages.level() == Level::Rows;
+    kernel::W32(g_tab.page + kPageNav, rows ? kNoNav : kSidewaysNav);
 }
 
 void SetCell(X86Context& ctx, uint32_t player, uint32_t row, uint32_t column, const std::string& text) {
@@ -393,10 +393,7 @@ void ShowTab(X86Context& ctx, uint32_t player, bool shown) {
 // the pause opened: the categories again, the stock directions back
 void OpenTab(X86Context& ctx, uint32_t player, uint32_t page) {
     bool fresh = page != g_tab.page;
-    if (fresh) {
-        g_tab.page = page;
-        g_tab.stock_nav = R32(page + kPageNav);
-    }
+    g_tab.page = page;
     g_tab.pages.Open();
     LatchStockParts(ctx);
     LayOutTabs(ctx, player, fresh);
