@@ -48,8 +48,9 @@ constexpr uint32_t kRect = 0x70;  // s16 x, y, w, h from the page's origin
 constexpr uint32_t kEventSlots = 0x7C;  // animations played on focus, press and the like
 constexpr uint32_t kEventSlotCount = 6;
 constexpr uint32_t kPageFocus = 0xAC;
-constexpr uint32_t kPageNav = 0xC0;  // the directions the dpad moves the menu's cursor in, 0 none
+constexpr uint32_t kPageNav = 0xC0;  // the directions the dpad moves the menu's cursor in (0x94400)
 constexpr uint32_t kNoNav = 0;
+constexpr uint32_t kSidewaysNav = 3;  // left and right only; 1 is all four, 2 up and down
 constexpr uint32_t kSub = 0x20;
 constexpr uint32_t kFlags = 0x7A;  // 1 hidden
 constexpr uint32_t kHidden = 1;
@@ -329,11 +330,13 @@ std::string Legend(const Row* selected) {
 
 // Showing the page.
 
-// left and right change a row's value instead of moving to the next tab
+// up and down stay in the list, else they move the cursor off the tab; on the rows left and right change a value
+// instead of moving to the next tab
 void ApplyNav() {
     if (!g_tab.page) return;
-    bool rows = g_tab.shown && g_tab.pages.level() == Level::Rows;
-    kernel::W32(g_tab.page + kPageNav, rows ? kNoNav : g_tab.stock_nav);
+    uint32_t nav = g_tab.stock_nav;
+    if (g_tab.shown) nav = g_tab.pages.level() == Level::Rows ? kNoNav : kSidewaysNav;
+    kernel::W32(g_tab.page + kPageNav, nav);
 }
 
 void SetCell(X86Context& ctx, uint32_t player, uint32_t row, uint32_t column, const std::string& text) {
