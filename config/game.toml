@@ -437,6 +437,12 @@ at = 0x22965
 call = "BombLaserDamage"
 on_true = 0x2298F
 
+# a laser or stunner shot shows for a 60 fps frame (src/game/beams.cpp)
+[[hook]]
+at = 0x2372B
+call = "BeamLingers"
+on_true = 0x23734
+
 # a flash grenade blinds for its time at any frame rate (src/game/flash_grenade.cpp)
 [[hook]]
 at = 0x22750
