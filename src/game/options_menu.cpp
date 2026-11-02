@@ -64,6 +64,7 @@ constexpr uint32_t kListWraps = 0x569;  // byte: a long text goes on in rows of 
 // its scrollbar's first row (+0x128, 0x97870's 0x26): no step goes below it, and a pick (0x1D) only takes from a row
 // at or past it
 constexpr uint32_t kListFirstRow = 0x250;
+constexpr uint32_t kListLoops = 0x26C;  // byte, its scrollbar's +0x144: a step past either end goes round
 
 // widget definition, as 0x70D40 reads it
 constexpr uint32_t kDefSize = 0x24;
@@ -387,7 +388,10 @@ void ApplyLevel(X86Context& ctx, uint32_t player) {
     SendToList(ctx, player, kSelectRow, uint32_t(std::clamp(g_tab.pages.line(), first, last)));
     // after the pick, which the first row would refuse while the first line is selected
     g_tab.list = PauseWidget(ctx, player, kList);
-    if (g_tab.list) kernel::W32(g_tab.list + kListFirstRow, uint32_t(first));
+    if (g_tab.list) {
+        kernel::W32(g_tab.list + kListFirstRow, uint32_t(first));
+        G<uint8_t>(g_tab.list + kListLoops) = 1;
+    }
     UpdateLegend(ctx, player, nullptr);
     ApplyNav();
 }
@@ -398,6 +402,10 @@ void ShowTab(X86Context& ctx, uint32_t player, bool shown) {
         g_tab.legend.clear();  // the stock tabs wrote the bar
         g_tab.pages.Top();
         ApplyLevel(ctx, player);
+    } else {
+        // the stock tabs share the list
+        uint32_t list = PauseWidget(ctx, player, kList);
+        if (list) G<uint8_t>(list + kListLoops) = 0;
     }
     ApplyNav();
 }
