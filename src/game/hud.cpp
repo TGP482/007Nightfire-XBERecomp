@@ -71,6 +71,9 @@ constexpr uint32_t kFmv43 = 1;
 // a menu page's background film (page +0xC4) loops (0x93115); the menus stay 4:3, so it does too
 constexpr uint32_t kFilmLoops = 8;  // 0xDCCD0's second argument, from the stack pointer
 constexpr uint32_t kReplayFilm = 0x4E504C59;  // 0xDCCD0's "NPLY": the film playing again
+// films FILL would cut: the EA logo (any language's, 0xDCCD0 picks it from this id) and the ending
+constexpr uint32_t kEaFilm = 0x7370048;
+constexpr uint32_t kEndFilm = 0x73F0048;
 // byte: 0xE8CF0 decodes no picture on the call after one that decoded, the console's next 60 Hz frame
 constexpr uint32_t kFilmSkipDecode = 0x2FF761;
 constexpr std::chrono::duration<double> kConsoleFrame{1.0 / 60};
@@ -104,7 +107,7 @@ uint32_t g_view = 0;  // while its 2D layer draws
 float g_marker_anchor = kAuto;
 bool g_film = false;  // the film player's frame draws
 bool g_side_bars = false;  // DrawSideBars draws
-bool g_menu_film = false;  // the film playing is a menu page's background
+bool g_film_43 = false;  // the film playing stays 4:3: a menu page's background, the EA logo or the ending
 float g_anchor = kCenter;
 std::mutex g_lock;
 std::unordered_map<uint32_t, float> g_anchors;  // 2D item -> its panel's anchor
@@ -180,7 +183,7 @@ void PlaceFilm(X86Context& ctx) {
     if (!game::Wide()) return;
     float& y = kernel::G<float>(ctx.esp + kSpriteY);
     float& h = kernel::G<float>(ctx.esp + kSpriteH);
-    uint32_t scale = g_menu_film ? kFmv43 : game::Opt().fmv_scale;
+    uint32_t scale = g_film_43 ? kFmv43 : game::Opt().fmv_scale;
     if (scale == kFmvFill) {
         float share = game::NarrowShare();
         y = kFrameMiddleY + (y - kFrameMiddleY) / share;
@@ -263,7 +266,9 @@ X86_FUNC(sub_000B1F90) { PlaceMarkers(ctx, base, __imp__sub_000B1F90, kRight); }
 // a film starts, cdecl (film, loops, volume)
 X86_EXTERN_FUNC(__imp__sub_000DCCD0);
 X86_FUNC(sub_000DCCD0) {
-    if (kernel::R32(ctx.esp + 4) != kReplayFilm) g_menu_film = kernel::G<uint8_t>(ctx.esp + kFilmLoops) != 0;
+    uint32_t film = kernel::R32(ctx.esp + 4);
+    bool loops = kernel::G<uint8_t>(ctx.esp + kFilmLoops) != 0;
+    if (film != kReplayFilm) g_film_43 = loops || film == kEaFilm || film == kEndFilm;
     __imp__sub_000DCCD0(ctx, base);
 }
 
