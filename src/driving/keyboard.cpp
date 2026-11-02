@@ -148,8 +148,11 @@ void DrivingSubMouse(input::Pad& pad);  // mouse.cpp
 
 void input::ImageKeys(Pad& pad) {
     PauseMouse(pad);
+    // in the pause only PAUSE MENU keeps its channel; a click there pressed FIRE's too
+    bool pause = driving::PauseShown();
     int sticks[kAnalogChannel] = {};
     for (const Key& k : kKeys) {
+        if (pause && k.action != kStart) continue;
         if (!Held(k.id)) continue;
         int c = Channel(k.action);
         if (c < 0) continue;
