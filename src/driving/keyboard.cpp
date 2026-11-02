@@ -97,6 +97,8 @@ constexpr int kDpadKeys[] = {VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT};
 constexpr int kAnalogA = 0;
 constexpr int kAnalogB = 1;
 constexpr uint16_t kBack = 0x20;
+// in the pause the drive keys are the dpad too, in its order
+constexpr const char* kPauseDpad[] = {"car_accelerate", "car_brake", "car_steer_left", "car_steer_right"};
 
 // the channel the table in use gives the action, or -1 when this mode has none
 int Channel(Action action) {
@@ -131,6 +133,15 @@ void PauseMouse(input::Pad& pad) {
     if (Down(VK_RBUTTON)) pad.analog[kAnalogB] = 0xFF;
 }
 
+// the drive keys step through the pause, Space is A and Shift is Back
+void PauseKeys(input::Pad& pad) {
+    if (!driving::PauseShown()) return;
+    for (int i = 0; i < 4; i++)
+        if (input::Held(kPauseDpad[i])) pad.buttons |= uint16_t(1u << i);
+    if (Down(VK_SPACE)) pad.analog[kAnalogA] = 0xFF;
+    if (Down(VK_SHIFT)) pad.buttons |= kBack;
+}
+
 }  // namespace
 
 void DrivingSubMouse(input::Pad& pad);  // mouse.cpp
@@ -155,4 +166,5 @@ void input::ImageKeys(Pad& pad) {
         if (Down(kDpadKeys[i])) pad.buttons |= uint16_t(1u << i);
     if (Down(VK_RETURN)) pad.analog[kAnalogA] = 0xFF;
     if (Down(VK_BACK)) pad.buttons |= kBack;
+    PauseKeys(pad);
 }

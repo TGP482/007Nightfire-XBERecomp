@@ -159,6 +159,9 @@ constexpr size_t kPanelAction = HostAction("settings_panel");
 constexpr size_t kHudAction = HostAction("toggle_hud");
 constexpr size_t kTexturesAction = HostAction("toggle_textures");
 constexpr size_t kWalkAction = HostAction("walk");
+// in the game's menus the move keys are the directions too, in kMenuUp's order
+constexpr size_t kMenuMoves[] = {HostAction("move_forward"), HostAction("move_back"), HostAction("strafe_left"),
+                                 HostAction("strafe_right")};
 struct Name {
     int vk;
     const char* name;
@@ -407,6 +410,23 @@ Use PressActions(const Binds& binds, bool menu, bool typing, float* values) {
     return use;
 }
 
+// the move keys step through the game's menus, Space accepts and Shift backs out
+void MenuKeys(const Binds& binds, float* values) {
+    for (int i = 0; i < 4; i++) {
+        const std::vector<int>& keys = binds[kMenuMoves[i]];
+        values[kMenuUp + i] += float(std::any_of(keys.begin(), keys.end(), Down));
+    }
+    if (Down(VK_SPACE)) {
+        values[kAccept] += 1.0f;
+        values[kAny] += 1.0f;
+    }
+    if (Down(VK_SHIFT)) {
+        SetKeyboard(true);
+        values[kBack] += 1.0f;
+        values[kAny] += 1.0f;
+    }
+}
+
 // the bound keys held this frame into the values, and the reload and action keys held
 Use Press(float* values, bool menu) {
     // a bind started in the pause menu takes the next key, and the key that bound waits for release
@@ -431,6 +451,7 @@ Use Press(float* values, bool menu) {
             values[kBack] += 1.0f;
             values[kAny] += 1.0f;
         }
+        if (!typing) MenuKeys(binds, values);
     }
     // the arrows, kFixed's first four, are the menus' directions in their order
     for (int i = 0; i < 4; i++) values[kMenuUp + i] += float(Down(kFixed[i]));
