@@ -1,6 +1,9 @@
+#include <algorithm>
+#include <cstdint>
 #include <iterator>
 
 #include "common/game_options.h"
+#include "common/options.h"
 #include "kernel/kernel.h"
 #include "xdk/hle.h"
 
@@ -56,17 +59,34 @@ constexpr uint32_t kMusicGroup = 0x1A27CC;
 constexpr uint32_t kEffectsGroup = 0x1A0028;
 constexpr uint32_t kMusicLevel = 0x1D8064;
 constexpr uint32_t kEffectsLevel = 0x1D8068;
+constexpr uint32_t kSpeechGroup = 0x18BC48;  // "Speech" under 1:Effects, the lines in the mission's .spe (0x121470)
 constexpr uint32_t kFindGroup = 0x11D720;  // (name)
 constexpr uint32_t kGroupLevel = 0x4;
 constexpr uint32_t kGroupLastLevel = 0x8;
 constexpr float kPercent = 0.01f;
 
-void ApplyVolume(X86Context& ctx, uint32_t group_name, uint32_t level, uint32_t volume) {
-    float share = float(R32(volume)) * kPercent;
-    G<float>(level) = share;
+void SetGroupLevel(X86Context& ctx, uint32_t group_name, float share) {
     uint32_t group = kernel::CallGuest(ctx, kFindGroup, {group_name});
     G<float>(group + kGroupLastLevel) = G<float>(group + kGroupLevel);
     G<float>(group + kGroupLevel) = share;
+}
+
+void ApplyVolume(X86Context& ctx, uint32_t group_name, uint32_t level, uint32_t volume) {
+    float share = float(R32(volume)) * kPercent;
+    G<float>(level) = share;
+    SetGroupLevel(ctx, group_name, share);
+}
+
+// the voice volume the Speech group has; the mission's sound start sets the group to 1
+constexpr uint32_t kNoVoice = UINT32_MAX;
+uint32_t g_voice = kNoVoice;
+bool g_sound_up = false;
+
+void ApplyVoice(X86Context& ctx) {
+    uint32_t voice = std::min<uint32_t>(game::Opt().voice_volume, 100);
+    if (voice == g_voice) return;
+    g_voice = voice;
+    SetGroupLevel(ctx, kSpeechGroup, float(voice) * kPercent);
 }
 
 }  // namespace
@@ -83,6 +103,7 @@ bool DrivingQueueSubtitle(X86Context&, uint8_t*) { return true; }
 bool DrivingSubtitleHidden(X86Context&, uint8_t*) { return R32(kSubtitles) == 0; }
 
 void game::SaveChangedOptions(X86Context& ctx) {
+    if (g_sound_up) ApplyVoice(ctx);
     if (!g_options_changed) return;
     g_options_changed = false;
     uint32_t hud = R32(kHud);
@@ -95,4 +116,13 @@ void game::SaveChangedOptions(X86Context& ctx) {
     kernel::W32(kEffectsBack, R32(kEffects));
     ApplyVolume(ctx, kMusicGroup, kMusicLevel, kMusic);
     ApplyVolume(ctx, kEffectsGroup, kEffectsLevel, kEffects);
+}
+
+// a mission's sound start, cdecl: its groups made and at their levels
+X86_EXTERN_FUNC(__imp__sub_00121470);
+X86_FUNC(sub_00121470) {
+    __imp__sub_00121470(ctx, base);
+    g_sound_up = true;
+    g_voice = kNoVoice;
+    ApplyVoice(ctx);
 }
