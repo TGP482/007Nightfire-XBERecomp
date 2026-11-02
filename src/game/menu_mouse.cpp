@@ -56,6 +56,7 @@ constexpr uint32_t kListRowHeight = 0x530;  // float
 constexpr uint32_t kListTop = 0x534;        // the first row shown
 constexpr uint32_t kListFirstRow = 0x250;  // its scrollbar's, below which a pick goes nowhere (options_menu.cpp)
 constexpr uint32_t kSelectRow = 0x1D;  // message: select the nth row, as its scrollbar does
+constexpr uint32_t kSelectedRow = 0x34;  // message: the row selected
 constexpr uint32_t kPostMessage = 0x72630;  // (widget, message, a, b)
 constexpr uint32_t kStyleOf = 0x71DB0;      // (widget): its style, +8 the top padding
 constexpr uint32_t kStylePadTop = 8;
@@ -233,7 +234,10 @@ void SelectRow(X86Context& ctx, uint32_t list, int py, bool click) {
     if (!click && list == last_list && row == last_row) return;
     last_list = list;
     last_row = row;
+    int was = int(kernel::CallGuest(ctx, kPostMessage, {list, kSelectedRow, 0, 0}));
     kernel::CallGuest(ctx, kPostMessage, {list, kSelectRow, uint32_t(row), 0});
+    // the sound the scrollbar plays for a dpad step up or down (0x97BE0)
+    if (row != was) kernel::CallGuest(ctx, kPlaySound, {row < was ? kSoundLower : kSoundHigher});
 }
 
 // The pages' widgets, once a page: what the next stage of the mouse needs (types, rects, value ranges).
