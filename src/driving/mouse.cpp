@@ -104,6 +104,30 @@ LookTurn MoveSight(uint32_t character, LookTurn mouse, float zoom) {
     return {rest_across / zoom, rest_up_down / zoom};
 }
 
+// static manual aim shuts the sight's dead zone while the look runs: the sight stays in the middle and the look turns
+// the view by the aim's rate (camera type +0x80) instead
+struct DeadZone {
+    uint32_t record = 0;
+    float pitch = 0.0f;
+    float yaw = 0.0f;
+};
+
+bool StaticAim() { return input::KeyboardActive() ? game::Opt().mouse_static_aim : game::Opt().pad_static_aim; }
+
+DeadZone ShutDeadZone(uint32_t character) {
+    uint32_t record = CameraRecord(character);
+    DeadZone zone{record, G<float>(record + kDeadZonePitch), G<float>(record + kDeadZoneYaw)};
+    G<float>(record + kDeadZonePitch) = 0.0f;
+    G<float>(record + kDeadZoneYaw) = 0.0f;
+    return zone;
+}
+
+void RestoreDeadZone(const DeadZone& zone) {
+    if (!zone.record) return;
+    G<float>(zone.record + kDeadZonePitch) = zone.pitch;
+    G<float>(zone.record + kDeadZoneYaw) = zone.yaw;
+}
+
 // the camera's rate and turn on one axis for the update, put back after it
 struct Axis {
     uint32_t rate;
@@ -131,8 +155,10 @@ X86_EXTERN_FUNC(__imp__sub_000857D0);
 X86_FUNC(sub_000857D0) {
     uint32_t character = ctx.ecx;
     uint32_t input = R32(character + kCharacterInput);
+    DeadZone zone;
     if (input) {
         bool aiming = G<uint8_t>(input + kAiming);
+        if (aiming && StaticAim()) zone = ShutDeadZone(character);
         LookTurn mouse = MouseTurn(aiming);
         LookTurn gyro = GyroTurn();
         float zoom = G<float>(character + kCharacterFov) / kUnzoomedFov;
@@ -142,6 +168,7 @@ X86_FUNC(sub_000857D0) {
         G<float>(character + kCharacterPitch) += (mouse.up_down + gyro.up_down) * zoom;
     }
     __imp__sub_000857D0(ctx, base);
+    RestoreDeadZone(zone);
 }
 
 // a camera's update, thiscall

@@ -620,6 +620,8 @@ enum RowId {
     kDumpFormatRow,
     kLanguageRow,
     kVoiceVolumeRow,
+    kMouseStaticAimRow,
+    kPadStaticAimRow,
 };
 
 // in RowId order
@@ -672,6 +674,8 @@ constexpr StepFn kSteps[] = {
     StepDumpFormat,
     StepLanguage,
     StepVoiceVolume,
+    StepToggle<&game::Options::mouse_static_aim>,
+    StepToggle<&game::Options::pad_static_aim>,
 };
 
 bool Held(int id) { return id == kMonitorRow || id == kDisplayModeRow || id == kResolutionRow; }
@@ -746,6 +750,7 @@ const std::vector<Row>& InputRows() {
             {Kind::Value, kAimVerticalRow, "AIM VERTICAL SENSITIVITY"},
             {Kind::Value, kInvertXRow, "INVERT X AXIS"},
             {Kind::Value, kInvertYRow, "INVERT Y AXIS"},
+            {Kind::Value, kMouseStaticAimRow, "STATIC MANUAL AIM"},
             {Kind::Heading, -1, "KEYBOARD"},
         };
         size_t count = 0;
@@ -772,6 +777,7 @@ constexpr Row kPadRows[] = {
     {Kind::Value, kPadInvertXRow, "INVERT X AXIS"},
     {Kind::Value, kDeadZoneRow, "DEADZONE"},
     {Kind::Value, kVibrationRow, "VIBRATION STRENGTH"},
+    {Kind::Value, kPadStaticAimRow, "STATIC MANUAL AIM"},
     {Kind::Heading, -1, "GYRO"},
     {Kind::Value, kGyroAimingRow, "GYRO AIMING"},
     {Kind::Value, kGyroSensitivityRow, "GYRO SENSITIVITY"},
@@ -873,6 +879,7 @@ void RestoreMouseDefaults() {
     o.aim_vertical_sensitivity = defaults.aim_vertical_sensitivity;
     o.invert_mouse = defaults.invert_mouse;
     o.invert_mouse_x = defaults.invert_mouse_x;
+    o.mouse_static_aim = defaults.mouse_static_aim;
     input::ResetBindings();
 }
 
@@ -885,6 +892,7 @@ void RestorePadDefaults() {
     o.pad_aim_vertical_sensitivity = defaults.pad_aim_vertical_sensitivity;
     o.invert_pad_x = defaults.invert_pad_x;
     o.pad_dead_zone = defaults.pad_dead_zone;
+    o.pad_static_aim = defaults.pad_static_aim;
     o.vibration_strength = defaults.vibration_strength;
     o.gyro = defaults.gyro;
     Save();

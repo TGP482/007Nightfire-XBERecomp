@@ -310,6 +310,8 @@ const app::GameInfo app::kGame = {
                 {"fps_counter", &game::Opt().fps_counter, nullptr},
                 {"pause_on_focus_loss", &game::Opt().pause_on_focus_loss, nullptr},
                 {"language", nullptr, &game::Opt().language},
+                {"mouse_static_aim", &game::Opt().mouse_static_aim, nullptr},
+                {"pad_static_aim", &game::Opt().pad_static_aim, nullptr},
                 {"invert_mouse", &game::Opt().invert_mouse, nullptr},
                 {"invert_mouse_x", &game::Opt().invert_mouse_x, nullptr},
                 {"invert_pad_x", &game::Opt().invert_pad_x, nullptr},

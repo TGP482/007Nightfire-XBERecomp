@@ -86,13 +86,25 @@ bool ManualAim(uint32_t player) {
     return G<uint8_t>(kernel::R32(player + kPlayerWeapon) + kWeaponFlags) & kManualAim;
 }
 
-// manual aim with a weapon whose sight moves
-bool SightMoves(uint32_t player) {
-    if (!ManualAim(player)) return false;
+uint8_t& RecordFlags(uint32_t player) {
     int8_t index = G<int8_t>(kernel::R32(player + kPlayerWeapon) + kWeaponRecord);
-    uint32_t record = kRecords + uint32_t(index) * kRecordSize;
-    return !(G<uint8_t>(record + kRecordFlags) & kSightStays);
+    return G<uint8_t>(kRecords + uint32_t(index) * kRecordSize + kRecordFlags);
 }
+
+// manual aim with a weapon whose own sight moves
+bool WeaponSightMoves(uint32_t player) { return ManualAim(player) && !(RecordFlags(player) & kSightStays); }
+
+// the static manual aim setting of the input the player uses now
+bool StaticAim(uint32_t player) {
+    uint32_t controller = kernel::R32(player + kPlayerController);
+    bool keyboard = G<int8_t>(controller + kControllerPlayer) == input::KeyboardPlayer() && input::KeyboardActive();
+    return keyboard ? game::Opt().mouse_static_aim : game::Opt().pad_static_aim;
+}
+
+// static manual aim gives every weapon the look of those whose sight stays in the middle
+bool HoldsSight(uint32_t player) { return StaticAim(player) && WeaponSightMoves(player); }
+
+bool SightMoves(uint32_t player) { return !StaticAim(player) && WeaponSightMoves(player); }
 
 // in manual aim or zoomed in
 bool Aiming(uint32_t player, uint32_t controller) {
@@ -193,7 +205,11 @@ X86_FUNC(sub_000B7610) {
     uint32_t player = kernel::R32(ctx.esp + 4);
     uint32_t controller = kernel::R32(player + kPlayerController);
     float pitch = G<float>(controller + kControllerPitch);
+    // the flag is only the look's here: the weapon's other rules for it stay
+    bool hold = HoldsSight(player);
+    if (hold) RecordFlags(player) |= kSightStays;
     __imp__sub_000B7610(ctx, base);
+    if (hold) RecordFlags(player) &= uint8_t(~kSightStays);
     bool aim = Aiming(player, controller);
     bool keyboard = G<int8_t>(controller + kControllerPlayer) == input::KeyboardPlayer();
     if (!keyboard || !input::KeyboardActive()) ScalePadLook(controller, aim, pitch);

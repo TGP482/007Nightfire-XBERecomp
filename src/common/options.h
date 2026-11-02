@@ -53,6 +53,9 @@ struct Options {
     // in manual aim or zoomed in, times the sensitivity above
     float aim_horizontal_sensitivity = 1.0f;
     float aim_vertical_sensitivity = 1.0f;
+    // manual aim keeps the sight in the middle and turns the view, for every weapon, by the input in use
+    bool mouse_static_aim = false;
+    bool pad_static_aim = false;
     bool invert_mouse = false;  // the Y axis
     bool invert_mouse_x = false;
     // the right stick's look, then in manual aim or zoomed in times it
