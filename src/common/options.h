@@ -45,6 +45,7 @@ struct Options {
     uint32_t colour_blind = 0;  // 0 off, 1 protanopia, 2 deuteranopia, 3 tritanopia
     uint32_t fmv_scale = 0;  // the full screen films on a wider screen: 0 fill it, 1 in a 4:3 frame
     uint32_t audio_output = 0;  // 0 automatic, 1 2.0 stereo, 2 5.1 surround, 3 mono
+    uint32_t voice_volume = 100;  // percent of the level the game gives the spoken lines, 0 to 100
     bool pause_on_focus_loss = true;  // the game and its sound stop while the window is in the background
     uint32_t language = 0;  // 0 the Windows display language, then English, French, German, Italian, Spanish, Dutch, Swedish
     float mouse_sensitivity = 1.0f;  // horizontal

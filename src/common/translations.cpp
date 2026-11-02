@@ -77,6 +77,7 @@ constexpr Entry kEntries[] = {
     {"FLASHING OBJECTS", {u"Objets clignotants", u"Blinkende Objekte", u"Oggetti lampeggianti", u"Objetos parpadeantes", u"Knipperende objecten", u"Blinkande föremål"}},
     {"HUD ALWAYS ON", {u"Interface toujours visible", u"HUD immer an", u"HUD sempre attivo", u"HUD siempre visible", u"HUD altijd aan", u"HUD alltid på"}},
     {"MANUAL AIM", {u"Visée manuelle", u"Manuelles Zielen", u"Mira manuale", u"Apuntado manual", u"Handmatig richten", u"Manuellt sikte"}},
+    {"VOICE VOLUME", {u"Volume des voix", u"Stimmenlautstärke", u"Volume voci", u"Volumen de las voces", u"Stemvolume", u"Röstvolym"}},
     {"MUSIC VOLUME", {u"Volume de la musique", u"Musiklautstärke", u"Volume musica", u"Volumen de la música", u"Muziekvolume", u"Musikvolym"}},
     {"SUBTITLES", {u"Sous-titres", u"Untertitel", u"Sottotitoli", u"Subtítulos", u"Ondertiteling", u"Undertexter"}},
     {"VIBRATION", {u"Vibrations", u"Vibration", u"Vibrazione", u"Vibración", u"Trilling", u"Vibration"}},

@@ -319,6 +319,7 @@ const app::GameInfo app::kGame = {
                 {"hdr_output", &game::Opt().hdr_output, nullptr},
                 {"colour_blind", nullptr, &game::Opt().colour_blind},
                 {"audio_output", nullptr, &game::Opt().audio_output},
+                {"voice_volume", nullptr, &game::Opt().voice_volume},
                 {"vibration_strength", nullptr, &game::Opt().vibration_strength},
                 {"gyro_aiming", &game::Opt().gyro.enabled, nullptr},
                 {"gyro_axis", nullptr, &game::Opt().gyro.axis},

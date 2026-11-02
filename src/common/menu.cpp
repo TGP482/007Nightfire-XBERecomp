@@ -362,6 +362,17 @@ constexpr uint32_t kAudioOutputs[] = {audio::kOutputAuto, audio::kOutputMono, au
                                       audio::kOutputSurround};
 const char* const kAudioOutputNames[] = {"AUTOMATIC", "MONO", "2.0 STEREO", "5.1 SURROUND"};
 
+constexpr int kVolumeStep = 5;  // the game's slider has 20 steps
+constexpr int kVolumeMax = 100;
+
+std::string StepPercent(uint32_t& volume, int step) {
+    int slot = std::clamp(int(volume), 0, kVolumeMax) / kVolumeStep;
+    if (step) volume = uint32_t(std::clamp(slot + step, 0, kVolumeMax / kVolumeStep) * kVolumeStep);
+    return std::to_string(volume) + "%";
+}
+
+std::string StepVoiceVolume(Settings&, int step) { return StepPercent(game::Opt().voice_volume, step); }
+
 std::string StepAudioOutput(Settings&, int step) {
     uint32_t& mode = game::Opt().audio_output;
     const char* name = kAudioOutputNames[StepTable(kAudioOutputs, mode, step)];
@@ -608,6 +619,7 @@ enum RowId {
     kTextureDumpingRow,
     kDumpFormatRow,
     kLanguageRow,
+    kVoiceVolumeRow,
 };
 
 // in RowId order
@@ -659,25 +671,17 @@ constexpr StepFn kSteps[] = {
     StepTextureDumping,
     StepDumpFormat,
     StepLanguage,
+    StepVoiceVolume,
 };
 
 bool Held(int id) { return id == kMonitorRow || id == kDisplayModeRow || id == kResolutionRow; }
 
 // The game's own options follow the panel's rows, one id each in the game's order
 constexpr int kFirstGameOption = int(std::size(kSteps));
-constexpr int kVolumeStep = 5;  // the game's slider has 20 steps
-constexpr int kVolumeMax = 100;
-
-std::string StepVolume(uint32_t address, int step) {
-    uint32_t& volume = kernel::G<uint32_t>(address);
-    int slot = std::clamp(int(volume), 0, kVolumeMax) / kVolumeStep;
-    if (step) volume = uint32_t(std::clamp(slot + step, 0, kVolumeMax / kVolumeStep) * kVolumeStep);
-    return std::to_string(volume) + "%";
-}
 
 std::string StepGameOption(const game::GameOption& option, int step) {
     if (step) game::g_options_changed = true;
-    if (option.kind == game::OptionKind::Volume) return StepVolume(option.address, step);
+    if (option.kind == game::OptionKind::Volume) return StepPercent(kernel::G<uint32_t>(option.address), step);
     uint8_t& value = kernel::G<uint8_t>(option.address);
     if (step) value = value ? 0 : 1;
     if (option.kind == game::OptionKind::HoldToggle) return value ? "TOGGLE" : "HOLD";
@@ -719,6 +723,7 @@ constexpr Row kSettingsRows[] = {
     {Kind::Value, kPauseOnFocusLossRow, "PAUSE ON FOCUS LOSS"},
     {Kind::Value, kLanguageRow, "LANGUAGE"},
     {Kind::Value, kAudioOutputRow, "AUDIO OUTPUT"},
+    {Kind::Value, kVoiceVolumeRow, "VOICE VOLUME"},
     {Kind::Heading, -1, "INPUT DEVICES"},
     {Kind::Value, kPlayer1Row, "PLAYER 1"},
     {Kind::Value, kPlayer2Row, "PLAYER 2"},
@@ -799,11 +804,12 @@ bool HasGameOption(game::OptionPlace place) {
     return std::any_of(options, options + count, [place](const game::GameOption& o) { return o.place == place; });
 }
 
-// GAMEPLAY between GRAPHICS and GENERAL, the volumes at the end of GENERAL
+// GAMEPLAY between GRAPHICS and GENERAL, the game's volumes before VOICE VOLUME at the end of GENERAL
 const std::vector<Row>& SettingsRows() {
     static const std::vector<Row> list = [] {
         std::vector<Row> out(std::begin(kSettingsRows), std::end(kSettingsRows));
-        InsertGameOptions(out, IndexOfHeading(out, "INPUT DEVICES"), game::OptionPlace::General);
+        auto voice = std::find_if(out.begin(), out.end(), [](const Row& r) { return r.id == kVoiceVolumeRow; });
+        InsertGameOptions(out, size_t(voice - out.begin()), game::OptionPlace::General);
         size_t general = IndexOfHeading(out, "GENERAL");
         InsertGameOptions(out, general, game::OptionPlace::Gameplay);
         if (HasGameOption(game::OptionPlace::Gameplay)) {
@@ -912,6 +918,7 @@ void RestoreDefaults(int page) {
     game::Opt().pause_on_focus_loss = game::Options{}.pause_on_focus_loss;
     game::Opt().language = game::Options{}.language;
     game::Opt().audio_output = game::Options{}.audio_output;
+    game::Opt().voice_volume = game::Options{}.voice_volume;
     audio::SetOutputMode(game::Opt().audio_output);
     game::Opt().monitor = game::Options{}.monitor;
     game::Opt().players = game::Options{}.players;
