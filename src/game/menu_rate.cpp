@@ -7,8 +7,9 @@
 
 // The menus count frames, not time: 0x94370 runs them once a frame (their input, pages and focus pulse). It runs 60
 // times a second instead, as on the console, at any frame rate; the widgets' 2D items stay drawn between runs. A press
-// is a state bit for one frame, so the presses of the frames between runs are kept for the next run. A held action
-// repeats after a count of its frames, which also goes up 60 times a second while a menu is up.
+// is a state bit for one frame, so the presses of the frames between runs are kept for the next run while still held:
+// a dpad's brief contact on a side as it rocks up or down falls between the console's samples. A held action repeats
+// after a count of its frames, which also goes up 60 times a second while a menu is up.
 namespace {
 
 using kernel::G;
@@ -22,6 +23,7 @@ constexpr uint32_t kStates = 0x1FE7D4;
 constexpr uint32_t kPlayerBlock = 0x158;
 constexpr uint32_t kPlayers = 4;
 constexpr uint8_t kEdges = 4 | 8;  // pressed, repeating
+constexpr uint8_t kHeld = 1;
 constexpr uint8_t kRepeating = 8;
 // u16 frames each action value has been held, beside the states; it repeats from 46 on, every 8th
 constexpr uint32_t kHeldFrames = 0x1FE784;
@@ -68,7 +70,8 @@ void KeepEdges() {
 }
 
 void ApplyEdges() {
-    for (size_t i = 0; i < g_edges.size(); i++) State(i) |= g_edges[i];
+    for (size_t i = 0; i < g_edges.size(); i++)
+        if (State(i) & kHeld) State(i) |= g_edges[i];
     g_edges.fill(0);
 }
 
