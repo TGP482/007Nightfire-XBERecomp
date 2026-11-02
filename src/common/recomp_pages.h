@@ -12,7 +12,7 @@ namespace app {
 
 class RecompPages {
 public:
-    enum class Level { Categories, Sections, Rows };
+    enum class Level { Categories, Sections, Rows, Confirm };  // Confirm: RESTORE DEFAULTS asks first
     enum class Pressed { Nothing, Opened, Stepped, Binding, Restored };
     struct Line {
         std::string label;
@@ -25,16 +25,19 @@ public:
     int line() const { return lines_[size_t(level_)]; }  // the line to select as the level shows
     std::vector<Line> Lines() const;
     const rows::Row* RowAt(int line) const;  // null off the rows level
-    // A on a line: opens a category or section, restores the defaults, waits for a key or steps a value on
+    // A on a line: opens a category or section, asks to restore the defaults and restores them on YES, waits for a
+    // key or steps a value on
     Pressed Press(int line);
     bool Back();  // a level up; false on the categories
     bool Step(int line, int step);  // false when the line has no value
 
 private:
+    Pressed Answer(int line);
+
     Level level_ = Level::Categories;
     int category_ = 0;    // rows::Page
     size_t section_ = 0;  // its heading's index in the page
-    std::array<int, 3> lines_{};  // by level
+    std::array<int, 4> lines_{};  // by level
 };
 
 }  // namespace app

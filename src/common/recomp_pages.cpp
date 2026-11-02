@@ -10,6 +10,10 @@ using rows::Kind;
 using rows::Row;
 
 constexpr char kRestoreDefaults[] = "RESTORE DEFAULTS";
+// the question, then NO first so a second press keeps the settings
+const char* const kConfirmLines[] = {"RESTORE ALL DEFAULTS?", "NO", "YES"};
+constexpr int kNoLine = 1;
+constexpr int kYesLine = 2;
 const char* const kCategories[] = {"RECOMP SETTINGS", "MOUSE AND KEYBOARD", "CONTROLLER"};  // rows::Page order
 constexpr int kCategoryCount = int(std::size(kCategories));
 
@@ -71,6 +75,8 @@ std::vector<RecompPages::Line> RecompPages::Lines() const {
     } else if (level_ == Level::Sections) {
         PageRows rows = RowsOf(category_);
         for (size_t heading : Sections(category_)) lines.push_back({rows.list[heading].label, {}});
+    } else if (level_ == Level::Confirm) {
+        for (const char* line : kConfirmLines) lines.push_back({line, {}});
     } else {
         for (const Row* row : SectionRows(category_, section_)) lines.push_back({row->label, rows::Value(*row)});
     }
@@ -84,6 +90,7 @@ const rows::Row* RecompPages::RowAt(int line) const {
 }
 
 RecompPages::Pressed RecompPages::Press(int line) {
+    if (level_ == Level::Confirm) return Answer(line);
     if (level_ == Level::Rows) {
         const Row* row = RowAt(line);
         if (!row) return Pressed::Nothing;
@@ -107,13 +114,22 @@ RecompPages::Pressed RecompPages::Press(int line) {
     if (line < 0 || line > int(pages.size())) return Pressed::Nothing;
     lines_[size_t(Level::Categories)] = line;
     if (line == int(pages.size())) {
-        for (int page : pages) rows::Defaults(page);
-        return Pressed::Restored;
+        lines_[size_t(Level::Confirm)] = kNoLine;
+        level_ = Level::Confirm;
+        return Pressed::Opened;
     }
     lines_[size_t(Level::Sections)] = 0;
     category_ = pages[size_t(line)];
     level_ = Level::Sections;
     return Pressed::Opened;
+}
+
+RecompPages::Pressed RecompPages::Answer(int line) {
+    if (line < kNoLine) return Pressed::Nothing;
+    level_ = Level::Categories;
+    if (line != kYesLine) return Pressed::Opened;
+    for (int page : Categories()) rows::Defaults(page);
+    return Pressed::Restored;
 }
 
 bool RecompPages::Back() {

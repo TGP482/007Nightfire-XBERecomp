@@ -374,7 +374,7 @@ void Sideways(X86Context& ctx, uint32_t menu, int step) {
 
 void Accept(X86Context& ctx) {
     Pressed pressed = g_page.pages.Press(g_page.line);
-    if (pressed == Pressed::Opened) ShowLevel();
+    if (pressed == Pressed::Opened || pressed == Pressed::Restored) ShowLevel();
     if (pressed == Pressed::Stepped) PlayToggle(ctx);
 }
 

@@ -323,7 +323,8 @@ std::string JoinLegend(const char* first, const char* last, bool rows) {
 
 std::string Legend(const Row* selected) {
     if (g_tab.pages.level() == Level::Categories) return JoinLegend("~A Select", "~S Continue", false);
-    if (g_tab.pages.level() == Level::Sections) return JoinLegend("~A Select", "~B Back", false);
+    bool lists = g_tab.pages.level() == Level::Sections || g_tab.pages.level() == Level::Confirm;
+    if (lists) return JoinLegend("~A Select", "~B Back", false);
     if (app::Capturing()) return "Press a key or mouse button to bind, Escape cancels";
     if (selected && selected->kind == Kind::Bind) return JoinLegend("~A Change key", "~B Back", true);
     return JoinLegend("~H Change", "~B Back", true);
@@ -411,7 +412,7 @@ void Press(X86Context& ctx, uint32_t player) {
     g_tab.pressed_frame = g_tab.frame;
     int line = int(SendToList(ctx, player, kSelectedRow));
     Pressed pressed = g_tab.pages.Press(line);
-    if (pressed == Pressed::Opened) ApplyLevel(ctx, player);
+    if (pressed == Pressed::Opened || pressed == Pressed::Restored) ApplyLevel(ctx, player);
     if (pressed == Pressed::Stepped) PlayStep(ctx, 1);
 }
 
