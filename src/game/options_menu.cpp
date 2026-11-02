@@ -61,6 +61,9 @@ constexpr uint32_t kLabelStringId = 0xF0;  // -1 when the text is given
 constexpr uint32_t kLabelText = 0xF4;
 constexpr uint32_t kNoStringId = 0xFFFFFFFF;
 constexpr uint32_t kListWraps = 0x569;  // byte: a long text goes on in rows of its own
+// its scrollbar's first row (+0x128, 0x97870's 0x26): no step goes below it, and a pick (0x1D) only takes from a row
+// at or past it
+constexpr uint32_t kListFirstRow = 0x250;
 
 // widget definition, as 0x70D40 reads it
 constexpr uint32_t kDefSize = 0x24;
@@ -155,6 +158,7 @@ struct Tab {
     float strip_left = 0.0f;
     float strip_right = 0.0f;
     bool shown = false;
+    uint32_t list = 0;  // the list the lines show in
     app::RecompPages pages;
     uint32_t frame = 0;  // the page's updates
     uint32_t pressed_frame = UINT32_MAX;  // A comes from the tab and the list both: one press an update
@@ -347,7 +351,10 @@ void SetCell(X86Context& ctx, uint32_t player, uint32_t row, uint32_t column, co
 // shown, emptied and laid out in columns
 void ResetList(X86Context& ctx, uint32_t player) {
     uint32_t list = PauseWidget(ctx, player, kList);
-    if (list) G<uint8_t>(list + kListWraps) = 0;
+    if (list) {
+        G<uint8_t>(list + kListWraps) = 0;
+        kernel::W32(list + kListFirstRow, 0);  // the clear's range reset needs it
+    }
     SendToList(ctx, player, kRowHeight, kLineHeight);
     SendToList(ctx, player, kSetFlags, 0);
     SendToList(ctx, player, kClearRows);
@@ -375,8 +382,12 @@ void ApplyLevel(X86Context& ctx, uint32_t player) {
         if (!line.value.empty()) SetCell(ctx, player, index, kValueColumn, line.value);
         g_tab.values.push_back(line.value);
     }
-    int last = std::max(int(lines.size()) - 1, 0);
-    SendToList(ctx, player, kSelectRow, uint32_t(std::clamp(g_tab.pages.line(), 0, last)));
+    int first = g_tab.pages.FirstSelectable();
+    int last = std::max(int(lines.size()) - 1, first);
+    SendToList(ctx, player, kSelectRow, uint32_t(std::clamp(g_tab.pages.line(), first, last)));
+    // after the pick, which the first row would refuse while the first line is selected
+    g_tab.list = PauseWidget(ctx, player, kList);
+    if (g_tab.list) kernel::W32(g_tab.list + kListFirstRow, uint32_t(first));
     UpdateLegend(ctx, player, nullptr);
     ApplyNav();
 }
@@ -449,6 +460,8 @@ void UpdateTab(X86Context& ctx, uint32_t player) {
 }
 
 }  // namespace
+
+uint32_t game::RecompList() { return g_tab.shown ? g_tab.list : 0; }
 
 void game::LatchScoreTab(uint32_t record, uint32_t def, uint32_t widget) {
     uint32_t page = R32(record + kRecordPage);

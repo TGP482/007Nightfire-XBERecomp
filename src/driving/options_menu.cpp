@@ -297,7 +297,7 @@ Lines LinesFor(uint32_t menu) {
 }
 
 void UpdateScroll(int shown, int count) {
-    g_page.line = std::clamp(g_page.line, 0, std::max(count - 1, 0));
+    g_page.line = std::clamp(g_page.line, g_page.pages.FirstSelectable(), std::max(count - 1, 0));
     if (g_page.line < g_page.top) g_page.top = g_page.line;
     if (g_page.line >= g_page.top + shown) g_page.top = g_page.line - shown + 1;
     g_page.top = std::clamp(g_page.top, 0, std::max(count - shown, 0));
@@ -664,7 +664,7 @@ int RecompLineAt(X86Context& ctx, uint32_t menu, const Pointer& p) {
 void PointRecompLine(X86Context& ctx, uint32_t menu, const Pointer& p) {
     if (!RecompShown(menu)) return;
     int line = RecompLineAt(ctx, menu, p);
-    if (line < 0) return;
+    if (line < g_page.pages.FirstSelectable()) return;  // -1 off the rows, or the question
     if (p.click) g_accepting = true;
     if ((!p.moved && !p.click) || g_page.line == line) return;
     g_page.line = line;

@@ -30,6 +30,7 @@ public:
     Pressed Press(int line);
     bool Back();  // a level up; false on the categories
     bool Step(int line, int step);  // false when the line has no value
+    int FirstSelectable() const;  // the first line the cursor may rest on, past Confirm's question
 
 private:
     Pressed Answer(int line);

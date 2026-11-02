@@ -132,6 +132,8 @@ RecompPages::Pressed RecompPages::Answer(int line) {
     return Pressed::Restored;
 }
 
+int RecompPages::FirstSelectable() const { return level_ == Level::Confirm ? kNoLine : 0; }
+
 bool RecompPages::Back() {
     if (level_ == Level::Categories) return false;
     level_ = level_ == Level::Rows ? Level::Sections : Level::Categories;
