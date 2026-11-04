@@ -33,6 +33,10 @@ constexpr uint32_t kHudSqueeze = 0x189ED0;  // 0.75, the HUD's 4:3 width on a wi
 // the target projection's stack at 0xCE371
 constexpr uint32_t kTargetCameraAngle = 0xF4;
 constexpr uint32_t kTargetHalfTan = 0x2C;
+// its result, a point on the HUD's frame, 10000 when the target is behind the view
+constexpr uint32_t kTargetPoint = 4;  // on the stack at entry
+constexpr uint32_t kFrameWidth = 0x1F2D7C;  // int
+constexpr float kOffView = 10000.0f;
 
 // the cull's stack at 0x8A490: the camera's angle, half the view's degrees as the draw takes it twice
 constexpr uint32_t kCullHalfAngle = 0xC;
@@ -107,7 +111,7 @@ void DrivingFov(X86Context& ctx, uint8_t*) {
 }
 
 // at 0xCE371: a target took the 4:3 view's angle, close to the wide view's once the HUD squeezes it; it takes the
-// view's own angle now, squeezed as the HUD is in its 16:9 box
+// view's own angle now, squeezed as the HUD is
 void DrivingTargetProjection(X86Context& ctx, uint8_t*) {
     uint32_t display = R32(kDisplay);
     float camera_angle = G<float>(ctx.esp + kTargetCameraAngle);
@@ -115,10 +119,22 @@ void DrivingTargetProjection(X86Context& ctx, uint8_t*) {
     float squeeze = 1.0f;
     if (G<uint8_t>(display + kWide)) {
         degrees *= G<float>(kWideFov);
-        squeeze = G<float>(kHudSqueeze) / game::WideBoxWidth();
+        squeeze = G<float>(kHudSqueeze);
     }
     float shown = SettingDegrees(OutputDegrees(degrees), camera_angle);
     G<float>(ctx.esp + kTargetHalfTan) = HalfTan(shown) * squeeze;
+}
+
+// a lock on target's place on the HUD (point, target), cdecl: the height already takes the output's shape, the
+// width spreads out of the HUD's 16:9 box to the view's sides on a wider screen
+X86_EXTERN_FUNC(__imp__sub_000CE2B0);
+X86_FUNC(sub_000CE2B0) {
+    uint32_t point = R32(ctx.esp + kTargetPoint);
+    __imp__sub_000CE2B0(ctx, base);
+    float& x = G<float>(point);
+    if (x == kOffView) return;
+    float middle = float(G<int32_t>(kFrameWidth)) / 2;
+    x = middle + (x - middle) / game::WideBoxWidth();
 }
 
 // at 0x8782E, before the player camera runs its type's update

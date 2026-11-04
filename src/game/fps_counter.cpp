@@ -48,7 +48,7 @@ constexpr uint32_t kGrey = 0x5D5D5DFF;  // the other recomps' watermark grey, 18
 constexpr uint32_t kUnused = 0xFFFFFFFF;  // as 0xD9410 passes it
 
 // the watermark ends this far in from the frame's right edge, as on the other recomps
-constexpr char kWatermark[] = "XBE Recomp V1";
+constexpr char kWatermark[] = "XBE Recomp V2";
 constexpr float kWatermarkRight = 80;
 constexpr float kLegendGap = 8;  // the least room between the legend's text and the watermark
 constexpr float kLowerLine = 16;  // where the legend leaves no room, the watermark goes a line below it
