@@ -71,8 +71,9 @@ constexpr uint32_t kFmv43 = 1;
 // a menu page's background film (page +0xC4) loops (0x93115); the menus stay 4:3, so it does too
 constexpr uint32_t kFilmLoops = 8;  // 0xDCCD0's second argument, from the stack pointer
 constexpr uint32_t kReplayFilm = 0x4E504C59;  // 0xDCCD0's "NPLY": the film playing again
-// films FILL would cut: the EA logo (any language's, 0xDCCD0 picks it from this id) and the ending
+// films FILL would cut: the EA and MGM logos (any language's, 0xDCCD0 picks it from this id) and the ending
 constexpr uint32_t kEaFilm = 0x7370048;
+constexpr uint32_t kMgmFilm = 0x7380048;
 constexpr uint32_t kEndFilm = 0x73F0048;
 // byte: 0xE8CF0 decodes no picture on the call after one that decoded, the console's next 60 Hz frame
 constexpr uint32_t kFilmSkipDecode = 0x2FF761;
@@ -271,7 +272,7 @@ X86_EXTERN_FUNC(__imp__sub_000DCCD0);
 X86_FUNC(sub_000DCCD0) {
     uint32_t film = kernel::R32(ctx.esp + 4);
     bool loops = kernel::G<uint8_t>(ctx.esp + kFilmLoops) != 0;
-    if (film != kReplayFilm) g_film_43 = loops || film == kEaFilm || film == kEndFilm;
+    if (film != kReplayFilm) g_film_43 = loops || film == kEaFilm || film == kMgmFilm || film == kEndFilm;
     __imp__sub_000DCCD0(ctx, base);
 }
 
