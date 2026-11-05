@@ -441,7 +441,8 @@ std::string StepDeadZone(Settings&, int step) {
         zone = float(StepIndex(slot, step, kTenthsPerUnit) + 1) / kTenthsPerUnit;
     }
     char text[24];
-    if (zone == 0.0f) std::snprintf(text, sizeof(text), "%.1f (DEFAULT)", game::kGameDeadZone);
+    bool game_zone = zone == 0.0f || zone == game::kGameDeadZone;
+    if (game_zone) std::snprintf(text, sizeof(text), "%.1f (DEFAULT)", game::kGameDeadZone);
     else std::snprintf(text, sizeof(text), "%.1f", zone);
     return text;
 }
