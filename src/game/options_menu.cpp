@@ -161,7 +161,6 @@ struct Tab {
     float strip_left = 0.0f;
     float strip_right = 0.0f;
     bool shown = false;
-    uint32_t list = 0;  // the list the lines show in
     app::RecompPages pages;
     uint32_t frame = 0;  // the page's updates
     uint32_t pressed_frame = UINT32_MAX;  // A comes from the tab and the list both: one press an update
@@ -391,10 +390,10 @@ void ApplyLevel(X86Context& ctx, uint32_t player) {
     int last = std::max(int(lines.size()) - 1, first);
     SendToList(ctx, player, kSelectRow, uint32_t(std::clamp(g_tab.pages.line(), first, last)));
     // after the pick, which the first row would refuse while the first line is selected
-    g_tab.list = PauseWidget(ctx, player, kList);
-    if (g_tab.list) {
-        kernel::W32(g_tab.list + kListFirstRow, uint32_t(first));
-        G<uint8_t>(g_tab.list + kListLoops) = 1;
+    uint32_t list = PauseWidget(ctx, player, kList);
+    if (list) {
+        kernel::W32(list + kListFirstRow, uint32_t(first));
+        G<uint8_t>(list + kListLoops) = 1;
     }
     UpdateLegend(ctx, player, nullptr);
     ApplyNav();
@@ -472,8 +471,6 @@ void UpdateTab(X86Context& ctx, uint32_t player) {
 }
 
 }  // namespace
-
-uint32_t game::RecompList() { return g_tab.shown ? g_tab.list : 0; }
 
 void game::LatchScoreTab(uint32_t record, uint32_t def, uint32_t widget) {
     uint32_t page = R32(record + kRecordPage);

@@ -10,7 +10,6 @@
 #include "core/log.h"
 #include "game/main_menu.h"
 #include "game/name_entry.h"
-#include "game/options_menu.h"
 #include "xdk/hle.h"
 
 // The game's menus run on a pointer of their own: each page update (0x95A80) first focuses the widget under the
@@ -226,12 +225,6 @@ void SelectRow(X86Context& ctx, uint32_t list, int py, bool click) {
     int pad = style ? G<int16_t>(style + kStylePadTop) : 0;
     int shown = int(std::floor(float(py - r.y - pad) / height));
     int row = int(R32(list + kListTop)) + shown;
-    static int logged_row = INT_MIN;
-    if (list == game::RecompList() && row != logged_row) {
-        logged_row = row;
-        LOGR("mouse: recomp row %d shown %d visible %u rows %u height %.1f pad %d first %d", row, shown,
-             R32(list + kListVisible), R32(list + kListRows), double(height), pad, int(R32(list + kListFirstRow)));
-    }
     if (shown < 0 || shown >= int(R32(list + kListVisible)) || row >= int(R32(list + kListRows))) return;
     if (row < int(R32(list + kListFirstRow))) return;
     if (!click && list == last_list && row == last_row) return;
@@ -341,11 +334,6 @@ void Point(X86Context& ctx, uint32_t record, uint32_t page) {
     }
     last_sub = -1;
     uint32_t w = WidgetAt(page, px, py);
-    uint32_t recomp = R32(page + kId) == kPauseId ? game::RecompList() : 0;
-    if (recomp && RectOf(recomp).Around(px, py)) {
-        LOGR("mouse: recomp list %08X at %d,%d picked %08X type %u sub %u flags %u focus %08X", recomp, px, py, w,
-             w ? TypeOf(w) : 0, w ? R32(w + kSub) : 0, w ? G<uint8_t>(w + kFlags) : 0, R32(page + kPageFocus));
-    }
     if (!w) return;
     uint32_t focus = R32(page + kPageFocus);
     // a pause tab shows its page on a click, not as the pointer passes over it

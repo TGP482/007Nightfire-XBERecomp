@@ -9,6 +9,5 @@ namespace game {
 void LatchScoreTab(uint32_t record, uint32_t def, uint32_t widget);  // a widget was made from its definition
 void LatchScoreMessage(uint32_t widget, uint32_t message, uint32_t a, uint32_t b);  // a widget was sent a message
 void EnsureRecompTab(X86Context& ctx, uint32_t record, uint32_t finished);  // the loader is done with a widget
-uint32_t RecompList();  // RECOMP's list while its lines show, else 0
 
 }  // namespace game
