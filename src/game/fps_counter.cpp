@@ -133,9 +133,11 @@ float LegendEnd(X86Context& ctx, uint32_t scratch, const game::LegendRow& legend
     uint32_t scale = scratch + kScaleAt;
     G<float>(scale) = 1.0f;
     G<float>(scale + 4) = 1.0f;
+    EndText(ctx);
     uint32_t size = kernel::CallGuest(ctx, kText,
                                       {Bits(0), Bits(0), kGrey, kGrey, kUnused, legend.text, legend.style, scale,
                                        kMeasureOnly, length, Bits(0)});
+    kernel::W32(kRecordCount, 0);  // the style's alignment clears kMeasureOnly (0x69B40), so its glyphs queue anyway
     if (!size) return 0;
     float width = G<float>(size);
     uint32_t align = kernel::CallGuest(ctx, kStyleAlign, {legend.style});
