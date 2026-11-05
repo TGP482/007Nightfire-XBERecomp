@@ -383,7 +383,14 @@ X86_FUNC(sub_000E6790) {
     float& uw = kernel::G<float>(ctx.esp + kSpriteUw);
     bool at_left = x <= left + kSlack;
     bool at_right = x + w >= right - kSlack;
-    // a picture from one side past the middle (a menu band whose ring frames another picture): split there, so the
+    // the menus stay 4:3, so a picture at one side of the frame narrows with the rest
+    if (at_left != at_right && g_view == kernel::R32(kViews + kMenuView * 4)) {
+        float end = Placed(x + w, kCenter, left, right);
+        x = Placed(x, kCenter, left, right);
+        w = end - x;
+        return __imp__sub_000E6790(ctx, base);
+    }
+    // a picture from one side past the middle (a band whose ring frames another picture): split there, so the
     // far part narrows with what is drawn over it and the rest still reaches the side
     if (at_left != at_right && x < middle && x + w > middle) {
         uint32_t ret = kernel::R32(ctx.esp);
