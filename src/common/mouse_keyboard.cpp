@@ -558,13 +558,14 @@ void SeenPad(const Pad& p) {
     if (p.buttons || analog || sticks) SetKeyboard(false);
 }
 
-bool KeyboardActive() { return g_keyboard; }
+// with no port holding the keyboard every player is on a controller
+bool KeyboardActive() { return g_keyboard && game::KeyboardPort() >= 0; }
 
 void SetMenu(bool menu) {
     if (g_menu.exchange(menu) != menu) app::RefreshCursor();
 }
 
-bool CursorShown() { return g_menu && g_keyboard; }
+bool CursorShown() { return g_menu && KeyboardActive(); }
 
 namespace {
 

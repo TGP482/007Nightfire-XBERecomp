@@ -29,7 +29,6 @@ constexpr uint32_t kRecordPage = 0x1BC;  // the page taking input
 constexpr uint32_t kPageWidgets = 0x94;
 constexpr uint32_t kPageLink = 0xA0;  // dwords from a widget's start to its link
 constexpr uint32_t kPageFocus = 0xAC;
-constexpr uint32_t kPageNav = 0xC0;
 constexpr uint32_t kParent = 0x0C;
 constexpr uint32_t kId = 0x18;
 constexpr uint32_t kSub = 0x20;
@@ -63,15 +62,11 @@ constexpr uint32_t kStylePadTop = 8;
 constexpr uint32_t kValueMin = 0x128;
 constexpr uint32_t kValueMax = 0x12C;
 constexpr uint32_t kValueNow = 0x130;
-constexpr uint32_t kValueFlags = 0x13C;
 constexpr uint32_t kValueWraps = 0x144;  // byte
 constexpr uint32_t kPlaySound = 0x730F0;  // (sound)
 constexpr uint32_t kSoundLower = 3;
 constexpr uint32_t kSoundHigher = 4;
 constexpr uint32_t kValueChanged = 0x49;
-// a choice row (type 9), for the log
-constexpr uint32_t kChoiceItems = 0x2F8;
-constexpr uint32_t kChoiceIndex = 0x2D8;
 // A carousel shows its value as five texts of one id, subs 0 to 4 the index -2 to +2, sub 2 in the band (0x7F680).
 constexpr uint32_t kCarouselTexts = 5;
 constexpr uint32_t kBand = 2;
@@ -236,29 +231,6 @@ void SelectRow(X86Context& ctx, uint32_t list, int py, bool click) {
     if (row != was) kernel::CallGuest(ctx, kPlaySound, {row < was ? kSoundLower : kSoundHigher});
 }
 
-// The pages' widgets, once a page: what the next stage of the mouse needs (types, rects, value ranges).
-void LogPage(uint32_t page) {
-    static uint32_t last = 0;
-    if (page == last) return;
-    last = page;
-    Rect p = RectOf(page);
-    LOGR("menu: page %08X id %08X nav %u at %d,%d", page, R32(page + kId), R32(page + kPageNav), p.x, p.y);
-    int n = 0;
-    for (uint32_t w = FirstWidget(page); w && n < kMaxWidgets; w = R32(w), n++) {
-        Rect r = RectOf(w);
-        uint8_t type = TypeOf(w);
-        LOGR("menu:   type %u id %08X sub %u flags %u z %u rect %d,%d %dx%d", type, R32(w + kId), R32(w + kSub),
-             G<uint8_t>(w + kFlags), G<uint16_t>(w + kZ), r.x, r.y, r.w, r.h);
-        if (type == kValue)
-            LOGR("menu:     value %d of %d..%d flags %u", int(R32(w + kValueNow)), int(R32(w + kValueMin)),
-                 int(R32(w + kValueMax)), G<uint8_t>(w + kValueFlags));
-        if (type == kList)
-            LOGR("menu:     rows %u visible %u height %.1f top %u", R32(w + kListRows), R32(w + kListVisible),
-                 double(G<float>(w + kListRowHeight)), R32(w + kListTop));
-        if (type == kChoiceRow) LOGR("menu:     item %u of %u", R32(w + kChoiceIndex), R32(w + kChoiceItems));
-    }
-}
-
 bool PauseTab(uint32_t page, uint32_t w) {
     if (R32(page + kId) != kPauseId || R32(w + kId) != kPauseWidgets) return false;
     const uint32_t* end = std::end(kPauseTabs);
@@ -301,7 +273,6 @@ void Point(X86Context& ctx, uint32_t record, uint32_t page) {
     static uint32_t last_page = 0;
     if (page != last_page) last_sub = -1;
     last_page = page;
-    LogPage(page);
     int x;
     int y;
     bool shown = MousePoint(x, y);

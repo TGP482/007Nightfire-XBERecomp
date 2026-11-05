@@ -280,11 +280,6 @@ void LayOutTabs(X86Context& ctx, uint32_t player, bool latch) {
         G<int16_t>(t.tab + kRect) = left;
         G<int16_t>(t.tab + kRect + 4) = int16_t(std::lround(x) - left - 1);
     }
-    static bool logged = false;
-    if (logged) return;
-    logged = true;
-    LOGR("pause: %zu tabs over %.0f..%.0f, labels %.0f wide, gaps %.1f", tabs.size(), double(g_tab.strip_left),
-         double(g_tab.strip_right), double(labels), double(gap));
 }
 
 // A legend is parts two spaces apart, each "~" and a button then its label; prompts.cpp names the keys.
@@ -312,8 +307,6 @@ void LatchStockParts(X86Context& ctx) {
         const char* host = static_cast<const char*>(kernel::HostPtr(text));
         std::string_view legend(host, strnlen(host, kMaxText));
         AddStockParts(g_tab.stock_parts, legend);
-        static int logged = 0;
-        if (logged++ < 2) LOGR("pause: stock legend %08X \"%.*s\"", id, int(legend.size()), legend.data());
     }
 }
 

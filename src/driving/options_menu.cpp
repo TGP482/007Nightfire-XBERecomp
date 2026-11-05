@@ -16,7 +16,6 @@
 #include "common/mouse_keyboard.h"
 #include "common/recomp_pages.h"
 #include "common/translations.h"
-#include "core/log.h"
 #include "driving/pause_menu.h"
 #include "kernel/memory.h"
 #include "xdk/hle.h"
@@ -290,9 +289,6 @@ Lines LinesFor(uint32_t menu) {
     float pitch = kRowPitch;
     int shown = pitch > 0.0f ? int((kBoxBottom - first) / pitch) : 1;
     shown = std::clamp(shown, 1, int(kMaxLines));
-    static bool logged = false;
-    if (!logged) LOGR("pause: RECOMP lines from y %.1f, %.1f apart, %d shown", double(first), double(pitch), shown);
-    logged = true;
     return {first, pitch, shown};
 }
 

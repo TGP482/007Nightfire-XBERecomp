@@ -4,7 +4,6 @@
 #include "common/aspect.h"
 #include "common/guest_call.h"
 #include "common/options.h"
-#include "core/log.h"
 #include "game/main_menu.h"
 #include "kernel/memory.h"
 #include "xdk/hle.h"
@@ -155,12 +154,6 @@ void DrawWatermark(X86Context& ctx, uint32_t scratch, const game::LegendRow& leg
     float baseline = legend.top + (legend.height + kLineHeight) / 2;
     float width = Text(ctx, scratch, length, {0, 0, kGrey, kGrey, kMeasureOnly}).width;
     if (right - width < legend_end + kLegendGap) baseline += kLowerLine;
-    static bool logged = false;
-    if (!logged) {
-        LOGR("watermark: x %.1f baseline %.1f width %.1f legend end %.1f", double(right - width), double(baseline),
-             double(width), double(legend_end));
-    }
-    logged = true;
     Text(ctx, scratch, length, {right - width, baseline, kGrey, kGrey, 0});
 }
 

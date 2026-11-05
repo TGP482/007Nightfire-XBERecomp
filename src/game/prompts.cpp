@@ -7,7 +7,6 @@
 
 #include "common/mouse_keyboard.h"
 #include "common/translations.h"
-#include "core/log.h"
 #include "game/main_menu.h"
 #include "kernel/memory.h"
 #include "xdk/hle.h"
@@ -109,9 +108,6 @@ bool TitleLine(X86Context& ctx, std::string_view text, std::string& line, int& c
     if (text.empty()) return false;
     std::string_view stock = GuestText(kernel::CallGuest(ctx, kStringText, {kTitleLine, 0, 0}));
     if (!stock.starts_with(text)) return false;
-    static bool logged = false;
-    if (!logged) LOGR("prompts: title line \"%.*s\"", int(stock.size()), stock.data());
-    logged = true;
     line = std::string(text);
     size_t word = FindStartWord(line);
     if (word == line.npos || line.find(kGlyph) != line.npos) return true;
