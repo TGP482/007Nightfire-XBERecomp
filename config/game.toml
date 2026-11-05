@@ -443,11 +443,16 @@ at = 0x3E78E
 call = "StunCount"
 on_true = 0x3E79D
 
-# a laser or stunner shot shows for a 60 fps frame (src/game/beams.cpp)
+# a shot's muzzle glow lasts its 60 fps frames (src/game/muzzle_glow.cpp)
 [[hook]]
-at = 0x2372B
-call = "BeamLingers"
-on_true = 0x23734
+at = 0xAE552
+call = "GlowCount"
+on_true = 0xAE568
+
+# a laser or stunner beam shows for a 60 fps frame after its shot (src/game/beams.cpp)
+[[hook]]
+at = 0xBB35D
+call = "BeamHolds"
 
 # a flash grenade blinds for its time at any frame rate (src/game/flash_grenade.cpp)
 [[hook]]
