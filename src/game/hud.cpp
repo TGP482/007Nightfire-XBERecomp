@@ -93,13 +93,16 @@ struct Panel {
     uint32_t descriptor;
     float anchor;
 };
-constexpr Panel kPanels[] = {{0x17FDE8, kLeft},   // health ring
+constexpr uint32_t kHealthRing = 0x17FDE8;
+constexpr uint32_t kActionIcon = 18;  // the ring's item 0xB2B50 shows at the top right: grapple, hang...
+constexpr Panel kPanels[] = {{kHealthRing, kLeft},  // health ring
                              {0x17F930, kRight},  // ammo
                              {0x180FBC, kRight},  // ammo, multiplayer
                              {0x181138, kAuto},   // multiplayer health bar
                              {0x181180, kAuto},
                              {0x1812D4, kAuto},
-                             {0x1806D8, kAuto}};  // multiplayer radar
+                             {0x1806D8, kAuto},   // multiplayer radar
+                             {0x180EC4, kRight}};  // Equinox's missile silos
 
 uint32_t g_view = 0;  // while its 2D layer draws
 // while a panel places its markers on the world, its anchor (0xB4760 its targets and 0xB4330 the flare in the middle,
@@ -303,8 +306,12 @@ X86_FUNC(sub_000B6AA0) {
             uint32_t items = kernel::R32(slot + kSlotItems);
             uint32_t count = kernel::G<uint16_t>(slot + kSlotItemCount);
             count += kernel::G<uint16_t>(descriptor + kDescriptorExtra);
-            for (uint32_t i = 0; i < count; i++)
-                if (uint32_t item = kernel::R32(items + i * 4)) g_anchors[item] = panel.anchor;
+            for (uint32_t i = 0; i < count; i++) {
+                uint32_t item = kernel::R32(items + i * 4);
+                if (!item) continue;
+                bool icon = descriptor == kHealthRing && i == kActionIcon;
+                g_anchors[item] = icon ? kRight : panel.anchor;
+            }
         }
     }
 }
