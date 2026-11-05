@@ -3,6 +3,7 @@
 
 #include "common/mouse_keyboard.h"
 #include "common/options.h"
+#include "game/custom_layout.h"
 #include "xdk/hle.h"
 
 // The keys join the game's actions after its controller layout has made them from the pad (0xDE720, a switch on the
@@ -73,7 +74,9 @@ X86_FUNC(sub_00072E20) {
 
 X86_EXTERN_FUNC(__imp__sub_000DE720);
 X86_FUNC(sub_000DE720) {
+    uint32_t players = kernel::R16(ctx.esp + 8);
     __imp__sub_000DE720(ctx, base);
+    game::ApplyCustomLayouts(players);
     g_press_taken = false;
     input::SetMenu(MenuUp());
     float keys[input::kActionValues] = {};

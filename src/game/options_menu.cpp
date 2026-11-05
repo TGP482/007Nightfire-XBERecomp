@@ -14,6 +14,7 @@
 #include "common/recomp_pages.h"
 #include "common/translations.h"
 #include "core/log.h"
+#include "game/custom_layout.h"
 #include "game/options_menu.h"
 #include "kernel/memory.h"
 
@@ -27,6 +28,7 @@ using kernel::R32;
 // the pause page; its tabs and their contents are one id, told apart by sub
 constexpr uint32_t kPauseId = 0x4000004B;
 constexpr uint32_t kPauseWidgets = 0x10000028;
+constexpr uint32_t kControlsTab = 3;
 constexpr uint32_t kScoreTab = 4;
 constexpr uint32_t kList = 8;          // the two column list
 constexpr uint32_t kRecompTab = 0x11;  // past the stock subs, 0 to 0x10
@@ -34,7 +36,7 @@ constexpr uint32_t kLegendId = 0x1000006F;  // the bar under the page, its butto
 // the legends OBJECTIVES and SCORE put in the bar as they take the focus (0x80590)
 constexpr uint32_t kStockLegends[] = {0x1000218, 0x100021B};
 constexpr int16_t kTabGap = 10;  // as 0x80030 lays out the multiplayer tabs
-constexpr uint32_t kTabs[] = {0, 1, 3, kScoreTab, kRecompTab};  // left to right; sub 2 is no tab
+constexpr uint32_t kTabs[] = {0, 1, kControlsTab, kScoreTab, kRecompTab};  // left to right; sub 2 is no tab
 
 // menu records, one a player
 constexpr uint32_t kRecords = 0x25F1D0;
@@ -330,8 +332,10 @@ std::string Legend(const Row* selected) {
     if (g_tab.pages.level() == Level::Categories) return JoinLegend("~A Select", "~S Continue", false);
     bool lists = g_tab.pages.level() == Level::Sections || g_tab.pages.level() == Level::Confirm;
     if (lists) return JoinLegend("~A Select", "~B Back", false);
+    if (app::CapturingPad()) return "Press a controller button to bind, Escape cancels";
     if (app::Capturing()) return "Press a key or mouse button to bind, Escape cancels";
     if (selected && selected->kind == Kind::Bind) return JoinLegend("~A Change key", "~B Back", true);
+    if (selected && selected->kind == Kind::PadBind) return JoinLegend("~A Change button", "~B Back", true);
     return JoinLegend("~H Change", "~B Back", true);
 }
 
@@ -508,10 +512,13 @@ X86_FUNC(sub_00080030) {
         kernel::Return(ctx, 1, 0);
         return;
     }
+    bool custom = game::CustomLayoutChosen(player);
     __imp__sub_00080030(ctx, base);
     uint32_t result = ctx.eax;
+    if (message == kOpened) game::AddCustomLayout(ctx, player, custom);
     if (message == kOpened) OpenTab(ctx, player, page);
     if (message == kUpdate) UpdateTab(ctx, player);
+    if (message == kUpdate) game::UpdateCustomLayout(ctx, player);
     ctx.eax = result;
 }
 
@@ -527,9 +534,11 @@ X86_FUNC(sub_00080590) {
         kernel::Return(ctx, 1, 0);
         return;
     }
+    bool custom = game::CustomLayoutChosen(player);
     __imp__sub_00080590(ctx, base);
     uint32_t result = ctx.eax;
     if (message == kFocused) ShowTab(ctx, player, sub == kRecompTab);
+    if (message == kFocused && sub == kControlsTab) game::ShowCustomLayout(ctx, player, custom);
     bool ours = sub == kRecompTab || sub == kList;
     if (message == kPressed && g_tab.shown && ours) Press(ctx, player);
     ctx.eax = result;

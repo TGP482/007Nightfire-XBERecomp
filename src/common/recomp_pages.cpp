@@ -94,7 +94,7 @@ RecompPages::Pressed RecompPages::Press(int line) {
     if (level_ == Level::Rows) {
         const Row* row = RowAt(line);
         if (!row) return Pressed::Nothing;
-        if (row->kind == Kind::Bind) {
+        if (row->kind == Kind::Bind || row->kind == Kind::PadBind) {
             rows::Bind(*row);
             return Pressed::Binding;
         }

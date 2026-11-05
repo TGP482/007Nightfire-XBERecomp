@@ -29,6 +29,7 @@
 #include "common/monitor.h"
 #include "common/mouse_keyboard.h"
 #include "common/options.h"
+#include "common/pad_binds.h"
 #include "common/translations.h"
 #include "kernel/kernel.h"
 
@@ -53,6 +54,7 @@ int g_page = 0;
 struct Capture {
     std::atomic<int> action{-1};  // the row being rebound, -1 when idle
     int slot = 0;  // its box: 0 the key, 1 the alternate
+    bool pad = false;  // a controller row, which a controller button binds
     bool armed = false;
     int done_frame = 0;  // frame of the last bind, the key that bound must not start another
 };
@@ -826,12 +828,16 @@ const std::vector<Row>& SettingsRows() {
     return list;
 }
 
-// the game's vibration switch and auto aim before the deadzone
+// the game's vibration switch and auto aim before the deadzone, then a bind row for each controller action
 const std::vector<Row>& PadRows() {
     static const std::vector<Row> list = [] {
         std::vector<Row> out(std::begin(kPadRows), std::end(kPadRows));
         auto deadzone = std::find_if(out.begin(), out.end(), [](const Row& r) { return r.id == kDeadZoneRow; });
         InsertGameOptions(out, size_t(deadzone - out.begin()), game::OptionPlace::Controller);
+        out.push_back({Kind::Heading, -1, "BUTTONS"});
+        size_t count = 0;
+        const input::PadAction* actions = input::PadActions(&count);
+        for (size_t i = 0; i < count; i++) out.push_back({Kind::PadBind, int(i), actions[i].label});
         return out;
     }();
     return list;
@@ -895,7 +901,7 @@ void RestorePadDefaults() {
     o.pad_static_aim = defaults.pad_static_aim;
     o.vibration_strength = defaults.vibration_strength;
     o.gyro = defaults.gyro;
-    Save();
+    input::ResetPadBindings();
 }
 
 void RestoreDefaults(int page) {
@@ -1058,9 +1064,10 @@ std::string KeyText(std::string keys) {
     return keys;
 }
 
-void StartCapture(int action, int slot) {
+void StartCapture(int action, int slot, bool pad = false) {
     g_capture.action = action;
     g_capture.slot = slot;
+    g_capture.pad = pad;
     g_capture.armed = false;
 }
 
@@ -1072,16 +1079,26 @@ void EndCapture() {
 // a row or a tab was just bound or chosen: nothing may start on the frame after a bind
 bool BindingSettled() { return !Capturing() && ImGui::GetFrameCount() > g_capture.done_frame + 1; }
 
-// Escape cancels, any other bindable key or mouse button binds
+// the row waiting for its key or button, and the prompt it shows
+bool CapturingRow(const Row& row) {
+    return Capturing() && g_capture.action == row.id && g_capture.pad == (row.kind == Kind::PadBind);
+}
+
+const char* CapturePrompt() { return g_capture.pad ? "PRESS A BUTTON" : "PRESS A KEY"; }
+
+// Escape cancels, any other bindable key or mouse button binds; a controller row takes a controller button instead
 void PollCapture() {
     if (!Capturing()) return;
     int vk = input::PressedKey();
+    int button = g_capture.pad ? input::PressedPadButton() : -1;
     if (!g_capture.armed) {
-        g_capture.armed = vk == 0;
+        g_capture.armed = vk == 0 && button < 0;
         return;
     }
-    if (vk == 0) return;
-    if (vk != VK_ESCAPE) input::Bind(size_t(g_capture.action.load()), vk, g_capture.slot);
+    size_t action = size_t(g_capture.action.load());
+    if (button >= 0) input::BindPad(action, button);
+    else if (vk == 0 || (g_capture.pad && vk != VK_ESCAPE)) return;
+    else if (vk != VK_ESCAPE) input::Bind(action, vk, g_capture.slot);
     EndCapture();
 }
 
@@ -1122,7 +1139,7 @@ BoxInput DrawKeyBox(const RowLayout& row, const KeyBox& box, const std::string& 
     bool lit = box.capturing || ImGui::IsItemFocused() || ImGui::IsItemHovered();
     ImU32 fill = ImGui::GetColorU32(lit ? ImGuiCol_Header : ImGuiCol_FrameBg);
     ImGui::GetWindowDrawList()->AddRectFilled(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), fill);
-    std::string text = game::PanelText(box.capturing ? "PRESS A KEY" : key);
+    std::string text = game::PanelText(box.capturing ? CapturePrompt() : key);
     float centred = (box.width - ImGui::CalcTextSize(text.c_str()).x) * 0.5f;
     ImGui::SetCursorPos(ImVec2(box.x + std::max(centred, 0.0f), row.origin.y));
     ImGui::AlignTextToFramePadding();
@@ -1165,7 +1182,7 @@ BindInput BindRow(const char* label, const std::vector<std::string>& keys, int c
 }
 
 void DrawBindRow(const Row& row) {
-    int capturing = g_capture.action == row.id ? g_capture.slot : -1;
+    int capturing = CapturingRow(row) ? g_capture.slot : -1;
     BindInput seen = BindRow(row.label, KeyBoxes(size_t(row.id)), capturing);
     if (seen.pointed >= 0) g_hovered_box = seen.pointed;
     // a Delete that answered a capture is no clear
@@ -1173,11 +1190,20 @@ void DrawBindRow(const Row& row) {
     if (seen.pressed >= 0 && BindingSettled()) StartCapture(row.id, seen.pressed);
 }
 
+// one box; a button moves between actions, so none is cleared
+void DrawPadBindRow(const Row& row) {
+    std::string button = KeyText(input::PadBindingName(size_t(row.id)));
+    BindInput seen = BindRow(row.label, {button}, CapturingRow(row) ? 0 : -1);
+    if (seen.pressed >= 0 && BindingSettled()) StartCapture(row.id, 0, true);
+}
+
 void DrawRow(const Row& row) {
     if (row.kind == Kind::Heading) {
         DrawHeading(row.label);
     } else if (row.kind == Kind::Bind) {
         DrawBindRow(row);
+    } else if (row.kind == Kind::PadBind) {
+        DrawPadBindRow(row);
     } else {
         DrawValueRow(row);
     }
@@ -1233,7 +1259,9 @@ void DrawTitle() {
 
 void DrawHint() {
     const char* hint = "";
-    if (Capturing()) {
+    if (Capturing() && g_capture.pad) {
+        hint = "Press a controller button to bind, Escape cancels";
+    } else if (Capturing()) {
         hint = "Press a key or mouse button to bind, Escape cancels";
     } else if (g_page == kInputPage && g_hovered_box >= 0) {
         hint = "Right click or Delete clears the key";
@@ -1315,8 +1343,9 @@ const rows::Row* rows::Page(int page, size_t* count) {
 
 // the pause menu applies a change at once, display rows too
 std::string rows::Value(const Row& row, int step) {
-    if (row.kind == Kind::Bind && g_capture.action == row.id) return "PRESS A KEY";
+    if (row.kind != Kind::Value && CapturingRow(row)) return CapturePrompt();
     if (row.kind == Kind::Bind) return KeyText(input::Binding(size_t(row.id)));
+    if (row.kind == Kind::PadBind) return KeyText(input::PadBindingName(size_t(row.id)));
     if (row.kind != Kind::Value) return {};
     std::string text = StepRow(row.id, Get(), step);
     if (step == 0) return text;
@@ -1330,12 +1359,16 @@ void rows::Defaults(int page) {
 }
 
 void rows::Bind(const Row& row) {
-    if (row.kind == Kind::Bind && !Capturing()) StartCapture(row.id, 0);
+    if (Capturing()) return;
+    if (row.kind == Kind::Bind) StartCapture(row.id, 0);
+    if (row.kind == Kind::PadBind) StartCapture(row.id, 0, true);
 }
 
 bool MenuOpen() { return g_open.load(std::memory_order_relaxed); }
 
 bool Capturing() { return g_capture.action >= 0; }
+
+bool CapturingPad() { return Capturing() && g_capture.pad; }
 
 void RefreshCursor() {
     void* hwnd = Window();

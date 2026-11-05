@@ -65,10 +65,12 @@ struct Options {
     float pad_aim_vertical_sensitivity = 1.0f;
     bool invert_pad_x = false;  // the game's own controls have the Y axis
     float pad_dead_zone = 0.0f;  // per stick axis, 0 the game's own
+    uint32_t custom_layouts = 0;  // a bit a player: the Custom controller layout, the game's own kept at NightFire
     uint32_t vibration_strength = 100;  // percent of the game's rumble, 10 to 200; the game has its own off
     gyro::Settings gyro;  // the controller's gyro turns player 1's view, beside the right stick
     std::string monitor;  // its device name, \\.\DISPLAY2; empty the primary
     std::map<std::string, std::string> keys;  // action id to key names, absent is the default
+    std::map<std::string, std::string> pad_buttons;  // controller action id to button name, absent is the stock one
     std::array<PlayerPort, kPlayers> players = {{{true, 0}, {false, 1}, {false, 2}, {false, 3}}};  // by port
 };
 Options& Opt();

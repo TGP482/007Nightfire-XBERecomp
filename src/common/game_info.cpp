@@ -19,6 +19,7 @@
 #include "common/monitor.h"
 #include "common/mouse_keyboard.h"
 #include "common/options.h"
+#include "common/pad_binds.h"
 #include "core/input.h"
 
 namespace game {
@@ -255,6 +256,9 @@ void Load(const void* table) {
     if (const toml::table* keys = t["keys"].as_table())
         for (auto&& [id, value] : *keys)
             if (auto v = value.value<std::string>()) o.keys[std::string(id.str())] = *v;
+    if (const toml::table* pads = t["pad_buttons"].as_table())
+        for (auto&& [id, value] : *pads)
+            if (auto v = value.value<std::string>()) o.pad_buttons[std::string(id.str())] = *v;
     LoadPlayers(t, o.players);
     audio::SetOutputMode(o.audio_output);
     g_fps_cap_saved = t.contains("fps_cap");
@@ -264,6 +268,7 @@ void Load(const void* table) {
 void Init() {
     if (!g_fps_cap_saved) app::Get().fps_cap = app::kFpsCapRefresh;
     input::LoadBindings();
+    input::LoadPadBindings();
 }
 
 void Save(void* table) {
@@ -275,6 +280,9 @@ void Save(void* table) {
     toml::table keys;
     for (const auto& [id, value] : Opt().keys) keys.insert(id, value);
     t.insert("keys", keys);
+    toml::table pads;
+    for (const auto& [id, value] : Opt().pad_buttons) pads.insert(id, value);
+    t.insert("pad_buttons", pads);
     for (int i = 0; i < kPlayers; i++) t.insert(PlayerKey(i), PortName(Opt().players[size_t(i)]));
 }
 
@@ -286,6 +294,8 @@ Options& Opt() {
 }
 
 bool ControllerPlugged(int slot) { return slot >= 0 && slot < kPlayers && RawPad(slot).connected; }
+
+input::Pad ControllerPad(int slot) { return RawPad(slot); }
 
 int KeyboardPort() {
     for (int i = 0; i < kPlayers; i++)
@@ -323,6 +333,7 @@ const app::GameInfo app::kGame = {
                 {"audio_output", nullptr, &game::Opt().audio_output},
                 {"voice_volume", nullptr, &game::Opt().voice_volume},
                 {"vibration_strength", nullptr, &game::Opt().vibration_strength},
+                {"custom_layouts", nullptr, &game::Opt().custom_layouts},
                 {"gyro_aiming", &game::Opt().gyro.enabled, nullptr},
                 {"gyro_axis", nullptr, &game::Opt().gyro.axis},
                 {"gyro_button", nullptr, &game::Opt().gyro.button},
