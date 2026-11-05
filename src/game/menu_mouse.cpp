@@ -103,9 +103,12 @@ constexpr uint32_t kLabelStyle = 0xC0;
 constexpr uint32_t kPauseId = 0x4000004B;
 constexpr uint32_t kPauseWidgets = 0x10000028;
 constexpr uint32_t kPauseTabs[] = {0, 1, 3, 4, 0x11};
+// menu records, one a player
+constexpr uint32_t kRecords = 0x25F1D0;
+constexpr uint32_t kRecordSize = 0x1D8;
+constexpr uint32_t kRecordCount = 5;
 
 uint32_t g_main_menu = 0;  // the main menu or title page while it takes input, until the menus' next run
-bool g_pause_menu = false;  // the pause page takes input, until the menus' next run
 game::LegendRow g_main_menu_row;  // the main menu's legend as last seen, for a title page without one
 
 struct Rect {
@@ -373,7 +376,6 @@ X86_FUNC(sub_00095A80) {
     bool current = page == R32(record + kRecordPage);
     uint32_t id = R32(page + kId);
     if (current && (id == kMainMenuId || id == kTitleId)) g_main_menu = page;
-    if (current && id == kPauseId) g_pause_menu = true;
     if (input && current) {
         Point(ctx, record, page);
         game::UpdateNameEntry(ctx, page);
@@ -383,10 +385,16 @@ X86_FUNC(sub_00095A80) {
 
 void game::ClearMainMenuLegend() {
     g_main_menu = 0;
-    g_pause_menu = false;
 }
 
-bool game::PauseMenuUp() { return g_pause_menu; }
+// as the records hold it: a menu run on the right button's back missed the pause page for a frame
+bool game::PauseMenuUp() {
+    for (uint32_t k = 0; k < kRecordCount; k++) {
+        uint32_t page = R32(kRecords + k * kRecordSize + kRecordPage);
+        if (page && R32(page + kId) == kPauseId) return true;
+    }
+    return false;
+}
 
 game::LegendRow game::TakeMainMenuLegend() {
     uint32_t page = g_main_menu;

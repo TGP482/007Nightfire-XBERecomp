@@ -21,6 +21,6 @@ LegendRow TakeMainMenuLegend();
 void ClearMainMenuLegend();  // before each run of the menus
 
 bool QuitAsked();  // exit_menu.cpp: QUIT's question is up
-bool PauseMenuUp();  // menu_mouse.cpp: the pause menu takes input, as of the menus' last run
+bool PauseMenuUp();  // menu_mouse.cpp: a player's menus show the pause page
 
 }  // namespace game
