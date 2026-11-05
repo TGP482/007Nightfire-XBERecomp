@@ -470,6 +470,15 @@ at = 0xAB0C3
 call = "FlashBlindStep"
 on_true = 0xAB0D5
 
+# a grenade bounces off and comes to rest as at the console rate (src/game/grenade_bounce.cpp)
+[[hook]]
+at = 0x21FA9
+call = "GrenadeBouncePush"
+
+[[hook]]
+at = 0x22036
+call = "GrenadeRestSpeed"
+
 # a shot tests for hits once per 60 fps frame, as its 60 fps step would (src/game/shot_hits.cpp)
 [[hook]]
 at = 0x23DC3
